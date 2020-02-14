@@ -1,6 +1,49 @@
 import numpy as np
 from Graphics.Paths import Path,Polygon
 
+coords_H = np.array([[-1, -1],
+                     [-1, 1],
+                     [-1. / 3, 1],
+                     [-1. / 3, 1. / 3],
+                     [1. / 3, 1. / 3],
+                     [1. / 3, 1],
+                     [1, 1],
+                     [1, -1],
+                     [-1, -1],
+                     [1. / 3, -1],
+                     [1. / 3, -1. / 3],
+                     [-1. / 3, -1. / 3],
+                     [-1. / 3, -1],
+                     [-1, -1]
+                     ])
+poly_H = Polygon(coords_H)
+coords_E = np.array([[-1, -1],
+                     [-1, 1],
+                     [1, 1],
+                     [1, 3. / 5],
+                     [-1. / 3, 3 / 5],
+                     [-1. / 3, 1 / 5],
+                     [1. / 3, 1. / 5],
+                     [1. / 3, -1. / 5],
+                     [-1. / 3, -1. / 5],
+                     [-1. / 3, -3. / 5],
+                     [1, -3. / 5],
+                     [1, -1],
+                     [-1, -1]])
+poly_E = Polygon(coords_E)
+
+coords_L = np.array([[-1, -1],
+                     [-1, 1],
+                     [-1 / 3, 1],
+                     [-1/ 3, -1 / 3],
+                     [1, -1 / 3],
+                     [1, -1],
+                     [-1, 1],
+                     [-1,-1]]
+                    )
+poly_L = Polygon(coords_L)
+
+
 def interp_paths(p_0,p_1,interp_t_range, des_t = np.linspace(0,1)):
     '''
     Interpolates paths between two polygons.
