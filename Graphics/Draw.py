@@ -9,14 +9,13 @@ coords_H = np.array([[-1, -1],
                      [1. / 3, 1],
                      [1, 1],
                      [1, -1],
-                     [-1, -1],
                      [1. / 3, -1],
                      [1. / 3, -1. / 3],
                      [-1. / 3, -1. / 3],
                      [-1. / 3, -1],
-                     [-1, -1]
                      ])
-poly_H = Polygon(coords_H)
+poly_H = Polygon(coords_H,loop=True)
+path_H = Path(coords_H,loop=True)
 coords_E = np.array([[-1, -1],
                      [-1, 1],
                      [1, 1],
@@ -29,8 +28,9 @@ coords_E = np.array([[-1, -1],
                      [-1. / 3, -3. / 5],
                      [1, -3. / 5],
                      [1, -1],
-                     [-1, -1]])
-poly_E = Polygon(coords_E)
+                     ])
+poly_E = Polygon(coords_E,loop=True)
+path_E = Path(coords_E,loop=True)
 
 coords_L = np.array([[-1, -1],
                      [-1, 1],
@@ -38,10 +38,10 @@ coords_L = np.array([[-1, -1],
                      [-1/ 3, -1 / 3],
                      [1, -1 / 3],
                      [1, -1],
-                     [-1, 1],
-                     [-1,-1]]
+                     ]
                     )
-poly_L = Polygon(coords_L)
+poly_L = Polygon(coords_L,loop=True)
+path_L = Path(coords_L,loop=True)
 
 
 def interp_paths(p_0,p_1,interp_t_range, des_t = np.linspace(0,1)):
@@ -89,7 +89,7 @@ def render_interpolate_time(p_0,p_1, t, t_per_draw, fs):
     :return: path_coords,t*fs
     '''
     interp_t_range = np.array([0,(t*fs -1)/(fs*t_per_draw)])
-    t_path = np.mod(np.arange(t * fs) / (fs* t_per_draw), 1)
+    t_path = np.arange(t * fs) / (fs* t_per_draw)
     path_coords = interp_paths(p_0,p_1,interp_t_range,t_path)
     return path_coords
 

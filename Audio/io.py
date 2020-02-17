@@ -1,10 +1,8 @@
 import os
 
-
-os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"+\
-"/Library/Frameworks/Python.framework/Versions/3.5/bin:/opt/local/bin:/opt/local/sbin:/Library/Frameworks/Python.framework/Versions/2.7/bin:/usr/local/sbin:/Library/Frameworks/Python.framework/Versions/3.4/bin:/opt/local/bin:/opt/local/sbin:/Library/Frameworks/Python.framework/Versions/3.4/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/Cellar:"
+os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:/opt/local/bin:/opt/local/var:/opt/local/sbin:/usr/local/sbin:/Library/Frameworks/Python.framework/Versions/3.5/bin"
 from pydub import AudioSegment
-from pydub.utils import audioop
+from pydub.utils import which
 import numpy as np
 import sys
 import warnings
@@ -25,7 +23,9 @@ def write_file(fname,aud_segment,np_array,def_ext='mp4'):
         np_array = np.asarray(np_array,dtype=determine_dtype(aud_segment))
     aud_segment.__setattr__('_data', np_array.tobytes('C'))
 
-    f_format = os.path.splitext(fname)[-1]
+    f_root,f_format = os.path.splitext(fname)[-2:]
+    AudioSegment.converter = which("ffmpeg")
+    np_array.tofile('{}.{}'.format(fname,'bin'))
     aud_segment.export(fname, format=(f_format if f_format else def_ext),#kwargs={'-vcodec':'codec','-acodec':'codec'}
                         )
 

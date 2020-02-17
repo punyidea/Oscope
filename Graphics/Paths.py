@@ -8,7 +8,7 @@ class Path(object):
     '''
     k_interp=3
 
-    def __init__(self,coords):
+    def __init__(self,coords, loop=False):
         '''
 
         :param coords: A list of coordinates of the object. Shape [npoints,ndims]
@@ -17,15 +17,25 @@ class Path(object):
             is such that a constant distance is travelled for each t.
         :return spline_mod: The underlying spline model of the path.
         '''
-        self.coords = coords
-        t_raw = self.get_cum_path_len(coords)
-        self.tot_len,self.t = t_raw[-1], t_raw/t_raw[-1]
-        self.spline_mod,_ = sp_interp.splprep(coords.T,u=self.t,k=self.k_interp,s=0)
+        self.update_coords(coords,loop)
+        # self.coords = coords
+        # self.loop = loop
+        # t_raw = self.get_cum_path_len(coords)
+        # self.tot_len,self.t = t_raw[-1], t_raw/t_raw[-1]
+        # self.spline_mod,_ = sp_interp.splprep(coords.T,u=self.t,k=self.k_interp,s=0)
 
-    def update_coords(self,coords):
+    def update_coords(self,coords,loop = False):
+        self.coords = coords
+        self.loop = loop
         t_raw = self.get_cum_path_len(coords)
         self.tot_len,self.t = t_raw[-1], t_raw/t_raw[-1]
-        self.spline_mod,self.t = sp_interp.splprep(coords.T,k=self.k_interp,s=0)
+        if self.loop :
+            last_side = np.sqrt(np.dot(coords[0] - coords[-1],coords[0]-coords[-1]))
+            self.t *= self.tot_len / (self.tot_len + last_side)
+            self.tot_len +=last_side
+            self.t = np.concatenate((self.t[min(-self.k_interp+1,-1):]-1, self.t, self.t[:self.k_interp]+1))
+            self.coords = np.concatenate((self.coords[min(-self.k_interp+1,-1):], self.coords, self.coords[:self.k_interp]),axis=0)
+        self.spline_mod,self.t = sp_interp.splprep(self.coords.T,u= self.t,k=self.k_interp,s=0)
 
     @staticmethod
     def calc_path_lengths(coords):

@@ -3,14 +3,15 @@ import numpy as np
 import numpy.testing
 import array
 
+from scipy.signal import hilbert
+
 from Audio.circle_transform import circle_transform
 from Audio.io import convert_dtype,write_file
 import os
-os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"+\
-"/Library/Frameworks/Python.framework/Versions/3.5/bin:/opt/local/bin:/opt/local/sbin:/Library/Frameworks/Python.framework/Versions/2.7/bin:/usr/local/sbin:/Library/Frameworks/Python.framework/Versions/3.4/bin:/opt/local/bin:/opt/local/sbin:/Library/Frameworks/Python.framework/Versions/3.4/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/Cellar:"
+os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"
 from pydub import AudioSegment
-from pydub.utils import audioop
 from Graphics.Draw import poly_H,poly_E,poly_L,\
+    path_H,path_L,path_E,\
     render_path_time,render_path_once,render_interpolate_time
 
 
@@ -42,16 +43,18 @@ class TestRead(unittest.TestCase):
         data_to_process = np.array(first_5_seconds.get_array_of_samples()).reshape([-1, 2])
         max_val, orig_dtype = np.abs(data_to_process).max(), data_to_process.dtype
         data_to_process = np.asarray(data_to_process, dtype='float64') / max_val
+        data_to_process = np.mean(data_to_process,axis=1)
 
-        [X, Y] = circle_transform(data_to_process, fs)
+        H = hilbert(data_to_process)
+        [X, Y] = np.real(H), np.imag(H)
 
-        t_per_draw = .1
+        t_per_draw = .2
         t_per_letter = 5
-        coords_h = render_path_time(poly_H,t_per_letter,t_per_draw,fs)
-        coords_h_e = render_interpolate_time(poly_H,poly_E,t_per_letter,t_per_draw,fs)
-        coords_e = render_path_time(poly_E,t_per_letter,t_per_draw,fs)
-        coords_e_l = render_interpolate_time(poly_E,poly_L,t_per_letter,t_per_draw,fs)
-        coords_l =render_path_time(poly_L,t_per_letter,t_per_draw,fs)
+        coords_h = render_path_time(path_H,t_per_letter,t_per_draw,fs)
+        coords_h_e = render_interpolate_time(path_H,path_E,t_per_letter,t_per_draw,fs)
+        coords_e = render_path_time(path_E,t_per_letter,t_per_draw,fs)
+        coords_e_l = render_interpolate_time(path_E,path_L,t_per_letter,t_per_draw,fs)
+        coords_l =render_path_time(path_L,t_per_letter,t_per_draw,fs)
 
         coords_letters = np.concatenate((coords_h,
                                    coords_h_e,
@@ -67,6 +70,6 @@ class TestRead(unittest.TestCase):
         animated_data = convert_dtype(full_data,first_5_seconds,max_val)
 
 
-        test_out = 'animated_hell.wav'
+        test_out = 'animated_hell_path.mp4'
         write_file(test_out,first_5_seconds,animated_data)
         self.assertTrue(False)
