@@ -1,6 +1,6 @@
 import os
 
-os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:/opt/local/bin:/opt/local/var:/opt/local/sbin:/usr/local/sbin:/Library/Frameworks/Python.framework/Versions/3.5/bin"
+#os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:/opt/local/bin:/opt/local/var:/opt/local/sbin:/usr/local/sbin:/Library/Frameworks/Python.framework/Versions/3.5/bin"
 from pydub import AudioSegment
 from pydub.utils import which
 import numpy as np
@@ -10,7 +10,7 @@ import warnings
 
 def write_file(fname,aud_segment,np_array,def_ext='mp4'):
     '''
-    A very delicate way to write the data to the object as it does not seem to be working.
+
     :param fname:
     :param aud_segment:
     :param np_array: of dim, N,num_channels, ALREADY in final state
@@ -24,6 +24,7 @@ def write_file(fname,aud_segment,np_array,def_ext='mp4'):
     aud_segment.__setattr__('_data', np_array.tobytes('C'))
 
     f_root,f_format = os.path.splitext(fname)[-2:]
+    f_format = f_format[1:]
     AudioSegment.converter = which("ffmpeg")
     np_array.tofile('{}.{}'.format(fname,'bin'))
     aud_segment.export(fname, format=(f_format if f_format else def_ext),#kwargs={'-vcodec':'codec','-acodec':'codec'}

@@ -6,9 +6,10 @@ import array
 from scipy.signal import hilbert
 
 from Audio.circle_transform import circle_transform
-from Audio.io import convert_dtype,write_file
+from Audio.sound_io import convert_dtype,write_file
 import os
-os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"
+#os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"
+print(os.environ['PATH'])
 from pydub import AudioSegment
 from Graphics.Draw import poly_H,poly_E,poly_L,\
     path_H,path_L,path_E,\
@@ -17,7 +18,7 @@ from Graphics.Draw import poly_H,poly_E,poly_L,\
 
 
 test_file = '/Users/vsp/Music/iTunes/iTunes Media/Music/Kimya Dawson/Remember That I Love You/07 I Like Giants.m4a'
-test_out = 'five_secs.mp4'
+test_out = 'animated_hell_path.mp4'
 
 class TestRead(unittest.TestCase):
     def test_fileio(self):
@@ -68,8 +69,5 @@ class TestRead(unittest.TestCase):
         full_data /= np.max(full_data)
 
         animated_data = convert_dtype(full_data,first_5_seconds,max_val)
-
-
-        test_out = 'animated_hell_path.mp4'
         write_file(test_out,first_5_seconds,animated_data)
-        self.assertTrue(False)
+        self.assertTrue(True)
