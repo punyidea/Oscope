@@ -7,28 +7,23 @@ import scipy.interpolate as sp_interp
 
 class Path(object):
     '''
-    k_interp is the k used in spline interpolation. 3 in default path, and 1 for a polygon.
-
-    TODO: Add functionality to:
-     - add paths
-     - rotate path
-     - translate path
-     - concatenate paths
-     - multiply paths (later)
+    k_interp is the k used in spline interpolation. 3 in default path_rot, and 1 for a polygon.
     '''
     k_interp_cls=3
 
-    def __init__(self,coords, t = None, tot_len=None, k_interp =None, loop=False):
+    def __init__(self,coords, t = None, tot_len=None, k_interp =None, loop=False, center = None):
         '''
 
         :param coords: A list of coordinates of the object. Shape [npoints,ndims]
-        :return tot_len: the total length of the path (euclidean distance between collective points)
+        :return tot_len: the total length of the path_rot (euclidean distance between collective points)
         :return self.t: a special list of the t values each point has. t \in [0,1] and
             is such that a constant distance is travelled for each t.
-        :return spline_mod: The underlying spline model of the path.
+        :return spline_mod: The underlying spline model of the path_rot.
         '''
         self.k_interp = k_interp if k_interp is not None else self.k_interp_cls
+
         self.update_coords(coords,t=t, tot_len=tot_len,loop=loop)
+        self.center = np.zeros(self.coords[0].size)
 
     def update_coords(self,coords,t=None,tot_len=None,loop = False):
         if t is None:
@@ -72,30 +67,27 @@ class Path(object):
             t[rel_inds<0] -=1; t[rel_inds>=n_knots] +=1
             self.t = t
             self.coords= self.coords[rel_inds% n_knots]
-            # self.t = np.concatenate((self.t[-self.k_interp+1:]-1 if self.k_interp>1 else None,
-            #                          self.t,
-            #                          self.t[:self.k_interp]+1))
-            # self.coords = np.concatenate((self.coords[-self.k_interp+1:] if self.k_interp>1 else None,
-            #                               self.coords,
-            #                               self.coords[:self.k_interp]),axis=0)
-        self.spline_mod,self.t = sp_interp.splprep(self.coords.T,u= self.t,k=self.k_interp,s=0)
+            self.spline_mod,self.t = sp_interp.splprep(self.coords.T,u= self.t,k=self.k_interp,s=0)
 
     def __add__(self, other):
         if issubclass(type(other),Path):
-            raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path addition modules.'))
+            raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path_rot addition modules.'))
         else:
             return self._add_const(other)
 
     def __iadd__(self, other):
         if issubclass(type(other),Path):
-            raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path addition modules.'))
+            raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path_rot addition modules.'))
         else:
             self.coords += other
+            self.center += other
             self.update_coords_manual(self.coords,self.t,self.tot_len,self.loop)
 
     def _add_const(self, other):
         coords = self.coords + other
-        return self.__class__(coords, self.t, self.tot_len)
+        center = self.center + other
+        return self.__class__(coords, self.t, self.tot_len,
+                              center=center, k_interp=self.k_interp,loop=self.loop)
 
 
     def __radd__(self,other):
@@ -104,23 +96,27 @@ class Path(object):
     def __mul__(self, other):
         if issubclass(type(other),Path):
             raise(NotImplementedError('Path multiplication is ambiguous. '
-                                      'Use one of the supported path addition modules.'))
+                                      'Use one of the supported path_rot addition modules.'))
         else:
             return self._mul_const(other)
 
     def __imul__(self, other):
         if issubclass(type(other),Path):
             raise(NotImplementedError('Path multiplication is ambiguous. '
-                                      'Use one of the supported path multiplication modules.'))
+                                      'Use one of the supported path_rot multiplication modules.'))
         else:
             self.coords*= other
+            self.center *= other
             self.tot_len *= other
             self.update_coords_manual(self.coords,self.t,self.tot_len,self.loop)
 
 
     def _mul_const(self, other):
         coords = self.coords * other
-        return self.__class__(coords, self.t, self.tot_len)
+        center = self.center * other
+        return self.__class__(coords, self.t, self.tot_len,
+                              center=center,
+                              k_interp=self.k_interp,loop=self.loop)
 
     def __rmul__(self,other):
         return self.__mul__(self,other)
@@ -135,6 +131,25 @@ class Path(object):
         return -self + other
 
     @staticmethod
+    def rot2d(path_rot, ang):
+        '''
+        Rotates a path_rot about its center by angle degrees.
+        Note: only support 2d for now
+        '''
+
+        s,c = np.sin(ang*np.pi/180), np.cos(ang*np.pi/180)
+        rot_mat = np.array([[c,-s],[s,c]])
+        coords = path_rot.coords - path_rot.center
+        new_coords = coords @ rot_mat.T + path_rot.center
+        return path_rot.__class__(new_coords, path_rot.t, path_rot.tot_len,
+                                  center=path_rot.center, k_interp=path_rot.k_interp,
+                                  loop=path_rot.loop)
+
+    @staticmethod
+    def translate(path,coords):
+        return path + coords
+
+    @staticmethod
     def validate_knots(A):
         if len(A.t)!= len(A.coords):
             raise(ValueError('t and coords are of differing lengths.  '
@@ -143,34 +158,36 @@ class Path(object):
     @staticmethod
     def add_exact_coords(A, B):
         '''
-        Adds two polygons, with exact coordinates.
-        Must be defined on the same t domain.
-        Note: For looping shapes, it is absolutely important that the max path (of loop) is 1.
-        :param other:
-        :return:
+        Adds two Paths, based on exact knot coordinates.
+        This is achieved by <>. In particular, when two polygons are added,
+        the result has the shape obtained when adding for every A(t) + B(t).
+        However, the result is then reparameterized so that it passes along the shape with constant arc length.
+
+        Result is found on intersection of t domains.
+        Note: For looping shapes, it is absolutely important that parameterization be [0,1].
+        :param A,B: Two Path objects, which we will add knot coordinates to make a new Path.
+        :return: A new Path object, defined on the intersection of <>.
+                In the case of a loop, it's a new loop defined on [0,1].
         '''
         Path.validate_knots(A)
         Path.validate_knots(B)
         if A.loop != B.loop:
             Warning('Warning: Adding a loop to a non-loop. Behavior here is unexpected.')
-        des_inds_A, des_inds_B = np.arange(len(A.t)),np.arange(len(B.t))
         loop_res = False
         if A.loop and B.loop:
             loop_res = True
             Warning('Warning: Adding two loops. Logic untested.')
             min_t,max_t = 0,1
+            if min_t < min(min(A.t),min(B.t)):
+                raise Warning('Extrapolating path_rot values.')
+            if max_t> max(max(A.t),max(B.t)):
+                raise Warning('Extrapolating path_rot values.')
         else:
             min_t,max_t = max(min(A.t),min(B.t)),min(max(A.t),max(B.t))
 
         des_inds_A = np.logical_and(A.t >= min_t, A.t <= max_t)
         des_inds_B = np.logical_and(B.t >= min_t, B.t <= max_t)
-
-        A_coords,B_coords = A.coords[des_inds_A],B.coords[des_inds_B]
         A_t,B_t = A.t[des_inds_A],B.t[des_inds_B]
-        # if A.loop and B.loop:
-        #
-        #     A = Path(A_coords, t=A_t, tot_len=A.tot_len, k_interp=A.k_interp)
-        #     B = Path(B_coords, t=B_t, tot_len=B.tot_len, k_interp=B.k_interp)
 
         final_t = np.union1d(A_t,B_t)
         final_t_in_A = np.isin(final_t,A.t)
@@ -181,19 +198,8 @@ class Path(object):
         B_eval_coords = np.stack([B.eval_coords(t) if not final_t_in_B[ind] else np.squeeze(B.coords[np.nonzero(B.t==t)])
                          for ind,t in enumerate(final_t)])
         coords = A_eval_coords + B_eval_coords
-        #tot_len = Path.get_tot_len(coords)
+
         k_interp = max(A.k_interp,B.k_interp)
-        # if loop_res:
-        #     #preserve only the lower indices
-        #     min_ind = max(np.argmax((final_t >= 0)) - (k_interp-1),
-        #                    0)
-        #     max_ind = min(np.argmax(final_t >=1) + k_interp,len(final_t))
-        #
-        #     final_inds =np.arange(min_ind,max_ind)
-        #
-        #     final_t = final_t[final_inds]
-        #     coords = coords[final_inds]
-        #return A.__class__(coords=coords,t = final_t,tot_len=tot_len,loop = loop_res, k_interp = k_interp)
         return A.__class__(coords = coords,k_interp = k_interp,loop = loop_res)
 
     @staticmethod
@@ -216,19 +222,6 @@ class Path(object):
         return np.array(sp_interp.splev(des_t,self.spline_mod))
 
 
-    @staticmethod
-    def concat_paths(*paths,cont_path=False):
-        if cont_path:
-            # len(paths)
-            # tot_len = sum(path.tot_len for path in paths)
-            # tot_t = []
-            # curr_t = 0
-            # for path in paths:
-            #     tot_t.append(path.t*path.tot_len/tot_len + curr_t)
-            #     curr_t +=path.tot_len/tot_len
-            # t = np.concatenate(tot_t)
-            coords = np.concatenate(path.coords for path in paths)
-            return Path(coords)
 
 
 class MultiPath(Path):

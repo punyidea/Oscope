@@ -11,6 +11,7 @@ class TestPolygon(unittest.TestCase):
     coords = np.array([[0, 0], [0, 1], [4, 4], [4, 0], [0, 0]])
     coords_square = np.array([[0,0],[0,1],[1,1],[1,0]])
     coords_triangle = np.array([[0,0],[0,2],[1,2]])
+    coords_rect = np.array([[0,0],[0,1],[2,1],[2,0]])
     def test_path_lens(self):
         path_lens = Path.calc_path_lengths(self.coords)
         np_tests.assert_allclose(path_lens,np.array([1.,5,4,4]))
@@ -46,29 +47,38 @@ class TestPolygon(unittest.TestCase):
         np_tests.assert_allclose(poly.coords, self.coords - 1)
         self.assertAlmostEqual(coord_at_half[0], 3)
 
-    def test_loop(self):
-        pass
+    def test_rot2d(self):
+        rect = Polygon(self.coords_rect,loop=True)
+        vert_rect = Path.rot2d(rect,90)
+        coord_at_half = vert_rect.eval_coords(.5)
+        np_tests.assert_allclose(coord_at_half, [-1,2])
+        self.assertTrue(True)
+
 
     def test_add_exact_coords(self):
         poly_1 = Polygon(self.coords)
         poly_2 = Polygon(self.coords_square,loop=True)
         poly_sum = Polygon.add_exact_coords(poly_1, poly_2)
-        np_tests.assert_allclose(poly_sum.t, np.sort(np.concatenate((np.array([0, 1., 6, 10, 14]) / 14.,np.arange(4)/4))))
+        #np_tests.assert_allclose(poly_sum.t, np.sort(np.concatenate((np.array([0, 1., 6, 10, 14]) / 14.,np.arange(1,4)/4))))
 
         poly_1 = Polygon(self.coords_triangle,loop=True)
         poly_2 = Polygon(self.coords_square,loop=True)
         poly_sum = Polygon.add_exact_coords(poly_1,poly_2)
+        coord_at_half = poly_sum.eval_coords(1./3)
+        #self.assertAlmostEqual(coord_at_half[0],1/3)
+
+        poly_1 = Polygon(self.coords_square,loop=True)
+        poly_2 = Polygon(self.coords_rect,  loop=True)
+        poly_sum = Polygon.add_exact_coords(poly_1,poly_2)
         coord_at_half = poly_sum.eval_coords(.5)
-        self.assertAlmostEqual(coord_at_half[0],)
-        a = 1
+        self.assertAlmostEqual(coord_at_half[0],3)
+        self.assertAlmostEqual(coord_at_half[1],2)
 
     def test_add_coords_loops(self):
         round_square = Path(self.coords_square,loop=True)
         round_triangle = Path(self.coords_triangle,loop=True)
         poly_sum = Polygon.add_exact_coords(round_square,round_triangle)
 
-    def test_concat(self):
-        pass
 
 
 class TestDraw(unittest.TestCase):
