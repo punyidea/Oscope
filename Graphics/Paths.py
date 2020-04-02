@@ -23,11 +23,10 @@ def check_listlike(obj):
 class Path(object):
     '''
     k_interp is the k used in spline interpolation. 3 in default path_rot, and 1 for a polygon.
-    #TODO: add reparameterize function.
     '''
     k_interp_cls=3
 
-    def __init__(self,coords, t = None, tot_len=None, k_interp =None, loop=False, center = None):
+    def __init__(self,coords, t = None, tot_len=None, k_interp =None, loop=False, center = None,**kwargs):
         '''
 
         :param coords: A list of coordinates of the object. Shape [npoints,ndims]
@@ -36,56 +35,177 @@ class Path(object):
             is such that a constant distance is travelled for each t.
         :return spline_mod: The underlying spline model of the path_rot.
         '''
+        coords,t,center,self.ndims = self.validate_inputs(coords,t,tot_len,loop,center)
         self.k_interp = k_interp if k_interp is not None else self.k_interp_cls
-
-        self.update_coords(coords,t=t, tot_len=tot_len,loop=loop)
-        self.center = np.array(center) if center is not None  else np.zeros(self.coords[0].size)
-
-    def update_coords(self,coords,t=None,tot_len=None,loop = False):
-        if t is None:
-            self.update_coords_from_coords(coords,loop=loop)
-        else:
-            self.update_coords_manual(coords,t=t,tot_len=tot_len,loop=loop)
-        self.ndims = self.coords.shape[-1]
-
-    def update_coords_manual(self,coords,t,tot_len,loop):
-        if loop:
-            Warning('Warning: No support exists yet for manual looping')
-        if len(t) != len(coords):
-            raise ImportError('Dim. Mismatch. Size t:{}, size coords:{}'.format(t.shape, coords.shape))
-        self.spline_mod, self.t = sp_interp.splprep(coords.T, u=t, k=self.k_interp, s=0)
-        self.tot_len = tot_len #if tot_len is not None else 1
-        self.coords = coords
         self.loop = loop
+        self.center = center if center is not None else np.zeros(self.ndims)
 
-    def update_coords_from_coords(self,coords,loop=False):
+        if self.loop:
+            coords,t = self.correct_loop_coords_t(coords,t)
+
+        self.coords = coords
+        self.reparameterize_t(t=t)
+        self.tot_len = tot_len if tot_len is not None else self.tot_len
+
+        self.update_spline_coords(**kwargs)
+
+    @staticmethod
+    def validate_inputs(coords,t,tot_len,loop,center):
+        coords = np.atleast_2d(coords)
+        if center is not None:
+            center = np.atleast_1d(center)
+            if coords.shape[-1:] != center.shape:
+                raise ValueError(
+                    'Dim Mismatch! Shape coord:{} shape center:{}'.format(
+                    coords.shape,center.shape
+                ))
+        if t is not None:
+            t = np.atleast_1d(t)
+            if len(coords) != len(t):
+                raise ValueError(
+                    'Dim Mismatch! Shape coord: {} shape center: {}'.format(
+                coords.shape, t.shape
+                ))
+
+        if t is not None and tot_len is None:
+            raise ValueError('Tot_len is undefined and t is explicitly chosen.')
+
+        if len(coords) < 2:
+            raise ValueError('Fewer than two points in coords_int_path.')
+
+        try:
+            loop = bool(loop)
+        except:
+            raise ValueError('Invalid input for \'loop\'.')
+
+        ndims = coords.shape[-1]
+        return coords,t,center,ndims
+
+    def reset_coords(self, coords, center=None, reparam = True,update_spline=True):
         '''
-        Creates a spline interpolation of the given coordinates.
+        Sets coordinates to coords_int_path.
+        Setting default True reparam to False keeps the existing parameterization.
+            Will throw error
         :param coords:
-        :param loop: If true, coords, is assumed to loop back on itself.
+        :param reparam:
+        :return:
+        '''
+
+        assert (coords.shape[-1] ==self.ndims)
+        if self.loop:
+            coords,t = self.correct_loop_coords_t(coords,self.t)
+        self.coords = coords
+
+        ndims = coords.shape[-1]
+        if ndims != self.ndims:
+            self.ndims = coords.shape[-1]
+            if center is None:
+                Warning('Resetting center to zero after change in dimensions.')
+                center = np.zeros(ndims)
+        if center is not None:
+            self.center = center
+
+        if reparam:
+            self.reparameterize_t(t=None)
+
+        elif len(coords) != len(self.t):
+            raise RuntimeError('Coordinates were set to a different length without')
+
+        if update_spline:
+            self.update_spline_coords()
+
+    def correct_loop_coords_t(self,coords,t,tol=1e-14):
+        last_side_len = np.sqrt(np.dot(coords[0] - coords[-1], coords[0] - coords[-1]))
+        if last_side_len < tol:
+            coords = coords[:-1]
+            t = t[:-1] if t is not None else None
+        return coords,t
+
+    def reparameterize_t(self,t=None,update_spline=True):
+        '''
+        Reparameterizes t coordinates of path.
+        If t is None, this is based on path length between coordinates.
+        :param t:
+        :return:
+        '''
+        if t is not None:
+            assert(len(t)==len(self.coords))
+            t = np.atleast_1d(t)
+            self.t = t
+        else:
+            self.t,self.tot_len = self.calc_t_path_len(self.coords)
+
+        if update_spline:
+            self.update_spline_coords()
+
+    def calc_t_path_len(self,coords):
+        '''
+        Creates a knot parameterization of coordinates based on path length.
+        :param coords:
+        :param loop: If true, coords_int_path, is assumed to loop back on itself.
         This is important because spline interpolation will use extra information from the last elements.
         :return:
         '''
-        self.coords = coords
-        self.loop = loop
         t_raw = self.get_cum_path_len(coords)
-        self.tot_len,self.t = t_raw[-1], t_raw/t_raw[-1]
+        tot_len = t_raw[-1]
+        t= t_raw/tot_len
+        if self.loop:
+            t,tot_len = self._correct_loop_t_totlen(self.coords, t,tot_len)
 
-        if self.loop :
-            last_side_len = np.sqrt(np.dot(coords[0] - coords[-1],coords[0]-coords[-1]))
-            if last_side_len ==0:
-                self.coords = self.coords[:-1]
-                self.t= self.t[:-1]
-            n_knots = len(self.coords)
-            t = self.t* self.tot_len / (self.tot_len + last_side_len)
-            self.tot_len +=last_side_len
-            rel_inds = np.arange(-self.k_interp+1,self.k_interp + n_knots)
-            t = t[rel_inds % n_knots]
-            t[rel_inds<0] -=1; t[rel_inds>=n_knots] +=1
-            self.t = t
-            self.coords= self.coords[rel_inds% n_knots]
+        return t,tot_len
 
-        self.spline_mod,self.t = sp_interp.splprep(self.coords.T,u= self.t,k=self.k_interp,s=0)
+    def _correct_loop_t_totlen(self, coords, t,tot_len):
+        '''
+        Accounts for the last side length that is not included in coordinates.
+        Note that coords_int_path and t cannot "loop back on themselves."
+        :param coords:
+        :param t:
+        :return:
+        '''
+        last_side_len = np.sqrt(np.dot(coords[0] - coords[-1], coords[0] - coords[-1]))
+        t = t * tot_len / (tot_len + last_side_len)
+        tot_len += last_side_len
+        return t,tot_len
+
+    def set_center(self,center):
+        center = np.atleast_1d(center)
+        assert(center.shape == (self.ndims,))
+        self.center= center
+
+    def set_tot_len(self,tot_len):
+        assert(tot_len >=0)
+        self.tot_len = tot_len
+
+
+    def update_spline_coords(self,**kwargs):
+        '''
+        Updates the internal spline coordinates which are passed to the spline interpolation routine.
+        :param kwargs:
+        :return:
+        '''
+        s = kwargs['s'] if 's' in kwargs else 0
+
+        coords,t = self.coords,self.t
+        if self.loop:
+            coords,t = self.gen_internal_coords_t_loop(coords,t,k_interp=self.k_interp)
+        self.spline_mod, _ = sp_interp.splprep(coords.T, u=t, k=self.k_interp, s=s,**kwargs)
+
+    @staticmethod
+    def gen_internal_coords_t_loop(coords,t,k_interp):
+        '''
+        In the case of a loop, prepend and append the last and first coords_int_path respectively.
+        Assumes t goes from 0 to 1, and thus that the domain is equiv. to (t % 1)
+        :param coords:
+        :param t:
+        :return:
+        '''
+        n_knots = len(coords)
+        rel_inds = np.arange(-k_interp + 1, k_interp + n_knots)
+        t = t[rel_inds % n_knots]
+        t[rel_inds < 0] -= 1; t[rel_inds >= n_knots] += 1
+        coords = coords[rel_inds % n_knots]
+        return coords,t
+
 
     def __add__(self, other):
         if issubclass(type(other),Path):
@@ -97,41 +217,42 @@ class Path(object):
         if issubclass(type(other),Path):
             raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path_rot addition modules.'))
         else:
-            self.coords += other
-            self.center += other
-            self.update_coords_manual(self.coords,self.t,self.tot_len,self.loop)
+            self._add_const(other,reparameterize=False,out=self)
+            return self
 
-    def _add_const(self, other):
+    def _add_const(self, other,reparameterize=False,out=None):
         '''
         Adds constant value to all coordinates (thru broadcasting).
         Note: A+1 adds 1 to all dimensions of coordinates.
         :param other:
         :return:
         '''
+        other = np.array(other)
+        assert(len(other.shape)<=1)
+        res = copy.deepcopy(self) if out is None else out
         coords = self.coords + other
         center = self.center + other
-        return self.__class__(coords, self.t, self.tot_len,
-                              center=center, k_interp=self.k_interp,loop=self.loop)
+
+        res.reset_coords(coords, center, reparam=reparameterize)
+        #res.update_spline_coords()
+        return res
 
 
     def __radd__(self,other):
         return self.__add__(other)
 
     def __mul__(self, other):
+        '''
+        Multiplication by a constant
+        automatically reparameterizes the path to work with arc length.
+        :param other:
+        :return:
+        '''
         if issubclass(type(other),Path):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot addition modules.'))
         else:
-            return self._mul_const(other)
-
-    def __matmul__(self,other):
-        if issubclass(type(other),Path):
-            raise(NotImplementedError('Path multiplication is ambiguous. '
-                                      'Use one of the supported path_rot addition modules.'))
-        else:
-            ret_var = self._mul_const(other)
-            ret_var.reparametrise()
-            return ret_var
+            return self._mul_const(other,reparameterize=True)
 
 
     def __imul__(self, other):
@@ -139,32 +260,26 @@ class Path(object):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot multiplication modules.'))
         else:
-            self.coords*= other
-            self.center *= other
-            self.tot_len *= other
-            self.update_coords_manual(self.coords,self.t,self.tot_len,self.loop)
+            self._mul_const(other,reparameterize=True,out=self)
+            return self
 
 
-    def _mul_const(self, other):
+    def _mul_const(self, other,reparameterize=True,out=None):
         '''
-        TODO:
-            - fix scaling of tot_len
-            - option to reparameterize in case of non-uniform scaling? TBD
-        :param other:
+        Scales coordinates about the object's center.
+        :param other: a vector, or scalar by which each coordinate is multiplied to obtain the final result.
         :return:
         '''
+        res = copy.deepcopy(self) if out is None else out
 
+        other = np.array(other)
+        assert(len(other.shape)<=1)
+        coords = (self.coords-self.center) * other + self.center
+        center = self.center
 
-        coords = self.coords * other
-        center = self.center * other
-        #total scaling. accurate if just one number.
-        other_arr = np.atleast_1d(other)
-        scale_fact = np.max(np.abs(other_arr))
-        tot_len = self.tot_len*scale_fact
-
-        return self.__class__(coords, self.t, tot_len,
-                              center=center,
-                              k_interp=self.k_interp,loop=self.loop)
+        res.reset_coords(coords, center, reparam=reparameterize)
+        res.update_spline_coords()
+        return res
 
     def __rmul__(self,other):
         return self.__mul__(other)
@@ -178,8 +293,27 @@ class Path(object):
     def __rsub__(self, other):
         return -self + other
 
+    def irot2d(self,ang,center=None):
+        '''
+        Rotates the object in place.
+        :param ang:
+        :param center:
+        :return:
+        '''
+        self._rot2d(self,ang,center=center,out=self)
+        return self
+
+    def rot2d(self,ang,center=None):
+        '''
+        returns a copy of the current object, rotated by ang degrees.
+        :param ang:
+        :param center:
+        :return:
+        '''
+        return self._rot2d(self, ang, center=center, out=None)
+
     @staticmethod
-    def rot2d(path_rot, ang, center= None):
+    def _rot2d(path_rot, ang, center= None,out=None):
         '''
         Rotates a path_rot about its center by angle degrees.
         Default value for center is the Path's center
@@ -191,54 +325,58 @@ class Path(object):
         rot_mat = np.array([[c,-s],[s,c]])
         coords = path_rot.coords - center
         new_coords = coords @ rot_mat.T + center
-        return path_rot.__class__(new_coords, path_rot.t, path_rot.tot_len,
-                                  center=path_rot.center, k_interp=path_rot.k_interp,
-                                  loop=path_rot.loop)
+
+        res = copy.deepcopy(path_rot) if out is None else out
+        res.reset_coords(new_coords, center, reparam=False)
+        res.update_spline_coords()
+        return res
 
     @staticmethod
     def translate(path,coords):
         return path + coords
 
     @staticmethod
-    def validate_knots(A):
+    def validate_path(A):
         if len(A.t)!= len(A.coords):
-            raise(ValueError('t and coords are of differing lengths.  '
-                             'Size t:{}, size coords:{}'.format(A.t.shape, A.coords.shape)))
+            raise(ValueError('t and coords_int_path are of differing lengths.  '
+                             'Size t:{}, size coords_int_path:{}'.format(A.t.shape, A.coords.shape)))
         if A.tot_len < 0:
             raise ValueError('tot_len is not positive.')
-
+        if A.coords.shape[-1]!= A.ndims or A.center.shape != (A.ndims,):
+            raise AssertionError('Number of dims is inconsistent across fields. '
+                                 'Dims: Coords;center;ndims'.format(
+            ))
+        assert(A.k_interp >0 and A.k_interp == int(A.k_interp))
 
     @staticmethod
-    def add_exact_coords(A, B):
+    def add_exact_coords(A, B): #reparameterize = True):
         '''
+
         Adds two Paths, based on exact knot coordinates.
         This is achieved by interspersing the knots according to t. In particular, when two polygons are added,
         the result has the shape obtained when adding for every A(t) + B(t).
-        However, the result is then reparameterized so that it passes along the shape with constant arc length.
-
+        If reparameterize is true, the result is then reparameterized so that it passes along the shape with constant arc length.
+            #TODO: implement reparameterize logic.
         Result is found on intersection of t domains.
         Note: For looping shapes, it is absolutely important that parameterization be [0,1].
         :param A,B: Two Path objects, which we will add knot coordinates to make a new Path.
-        :return: A new Path object, defined on the intersection of <>.
+        :return: A new Path object, defined on the intersection of their domains.
                 In the case of a loop, it's a new loop defined on [0,1].
         '''
-        Path.validate_knots(A)
-        Path.validate_knots(B)
+        Path.validate_path(A)
+        Path.validate_path(B)
 
-        if A.coords.shape[-1] != B.coords.shape[-1]:
-            raise ValueError('Dimension mismatch between add args. A.coords shape: {}. B.coords shape: {}'.format(
+        if A.ndims != B.ndims:
+            raise ValueError('Dimension mismatch between add args. A.coords_int_path shape: {}. B.coords_int_path shape: {}'.format(
                 A.coords.shape,B.coords.shape))
         if A.loop != B.loop:
             Warning('Warning: Adding a loop to a non-loop. Behavior here is unexpected.')
         loop_res = False
         if A.loop and B.loop:
-            loop_res = True
-            Warning('Warning: Adding two loops. Logic untested.')
-            min_t,max_t = 0,1
-            if min_t < min(min(A.t),min(B.t)):
-                Warning('Extrapolating path_rot values.')
-            if max_t> max(max(A.t),max(B.t)):
-                Warning('Extrapolating path_rot values.')
+            #loop_res = True
+            # Warning('Warning: Adding two loops. Logic untested.')
+            #min_t,max_t = 0,1
+            min_t, max_t = min(min(A.t), min(B.t)), max(max(A.t), max(B.t))
         else:
             min_t,max_t = max(min(A.t),min(B.t)),min(max(A.t),max(B.t))
 
@@ -255,10 +393,15 @@ class Path(object):
         B_eval_coords = np.stack([B.eval_coords(t) if not final_t_in_B[ind] else np.squeeze(B.coords[np.nonzero(B.t==t)])
                          for ind,t in enumerate(final_t)])
         coords = A_eval_coords + B_eval_coords
+        center = A.center + B.center
 
         k_interp = max(A.k_interp,B.k_interp)
-        return A.__class__(coords = coords,k_interp = k_interp,loop = loop_res)
 
+        res = copy.deepcopy(A)
+        res.reset_coords(coords, center, reparam=True)
+
+        res.update_spline_coords()
+        return res
     @staticmethod
     def calc_path_lengths(coords):
         diff_var = np.diff(coords,axis=0)
@@ -290,7 +433,6 @@ class Path(object):
             res = np.array(sp_interp.splev(des_t,self.spline_mod)).T
 
         return res
-
 
 class MultiPath(object):
     '''

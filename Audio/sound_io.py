@@ -26,7 +26,7 @@ def write_file(fname,aud_segment,np_array,def_ext='mp4'):
     f_root,f_format = os.path.splitext(fname)[-2:]
     f_format = f_format[1:]
     AudioSegment.converter = which("ffmpeg")
-    np_array.tofile('{}.{}'.format(fname,'bin'))
+    #np_array.tofile('{}.{}'.format(fname,'bin'))
     aud_segment.export(fname, format=(f_format if f_format else def_ext),#kwargs={'-vcodec':'codec','-acodec':'codec'}
                         )
 
