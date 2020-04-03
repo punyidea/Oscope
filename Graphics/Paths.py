@@ -437,13 +437,7 @@ class Path(object):
 class MultiPath(object):
     '''
     An object that stores the concatenation of multiple paths.
-    TODO: Method that:
-        - stores multiple Path instances
-        - eval_path(t) which is vectorized
-        - add overload v
-        - concatenate method - same as add overload?
-        - rotate method
-        - rescale method v
+    TODO: Redo operator logic, to be cleaner.
     '''
     def __init__(self,path_list,t_ints, scales, t_int_from_path_len=False, center = None, tot_len = None):
         '''
