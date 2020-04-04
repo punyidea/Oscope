@@ -205,7 +205,7 @@ class TestMultiPath(unittest.TestCase):
 class TestDraw(unittest.TestCase):
     @staticmethod
     def plot_render(path_to_draw,n_points=500):
-        path_render = render_path_once(path_to_draw,1,n_points)
+        path_render = render_path_once(path_to_draw,1,n_points).T
         plt.plot(path_render[0],path_render[1])
     def test_plot_path(self):
         self.plot_render(poly_H)

@@ -188,7 +188,7 @@ class Path(object):
         coords,t = self.coords,self.t
         if self.loop:
             coords,t = self.gen_internal_coords_t_loop(coords,t,k_interp=self.k_interp)
-        self.spline_mod, _ = sp_interp.splprep(coords.T, u=t, k=self.k_interp, s=s,**kwargs)
+        self.spline_mod, _ = sp_interp.splprep(coords.T, u=t, k=self.k_interp, s=s,**kwargs,per=self.loop)
 
     @staticmethod
     def gen_internal_coords_t_loop(coords,t,k_interp):
@@ -199,11 +199,13 @@ class Path(object):
         :param t:
         :return:
         '''
-        n_knots = len(coords)
-        rel_inds = np.arange(-k_interp + 1, k_interp + n_knots)
-        t = t[rel_inds % n_knots]
-        t[rel_inds < 0] -= 1; t[rel_inds >= n_knots] += 1
-        coords = coords[rel_inds % n_knots]
+        # n_knots = len(coords)
+        # rel_inds = np.arange(-k_interp + 1, k_interp + n_knots)
+        # t = t[rel_inds % n_knots]
+        # t[rel_inds < 0] -= 1; t[rel_inds >= n_knots] += 1
+        # coords = coords[rel_inds % n_knots]
+        t = np.append(t,1)
+        coords = coords[np.arange(len(coords) + 1) % len(coords)]
         return coords,t
 
 
@@ -629,6 +631,7 @@ class MultiPath(object):
 
 
     def _mul_const(self, other):
+        #TODO: fix
          scales = self.scales * other
          center = self.center * other
          ret_obj = copy.deepcopy(self)
@@ -676,5 +679,80 @@ class MultiPath(object):
 
     def __rsub__(self, other):
         return -self + other
+
 class Polygon(Path):
     k_interp_cls = 1
+
+class RegPolygon(Polygon):
+    '''
+    Convenience class for making regular polygons (in 2d).
+    Give number of sides, radius, and center.
+
+    Polygon is assumed to be drawn as endpoints of n_sides equiangular arcs
+        of a circle with center at center and radius radius.
+    Ang is the angle of CCW rotation, in degrees,
+        from having starting coordinate in direction of positive x-axis.
+    Center is a length 2 vector describing the center of the polygon in 2d space.
+        if center is not given, it is assumed to be centered at the origin.
+
+    '''
+    def __init__(self, n_sides, radius, center=None, ang=0, **kwargs):
+
+        if n_sides < 3:
+            raise ValueError('Polygon with fewer than 3 sides chosen.')
+        if radius < 0:
+            raise ValueError('Polygon with negative radius not possible.')
+        if center is not None:
+            center = np.atleast_1d(center)
+            if np.shape(center) != (2,):
+                raise ValueError('Center of 2d polygon has unexpected shape.')
+        else:
+            center = np.zeros(2)
+
+        ang_offset = ang*np.pi/180
+        angs = np.arange(n_sides) *np.pi*2/n_sides+ ang_offset
+        coords = radius*np.stack((np.cos(angs),np.sin(angs)),axis=-1) + center
+        super().__init__(coords, center=center,loop=True,**kwargs)
+
+def make_sierpinski_triangle(n_layers,radius,center=None):
+    '''
+    Generate a Sierpinski Triangle with n_layers iterations.
+    Has radius given by radius and center by center.
+    :param n_layers:
+    :param radius:
+    :param center:
+    :return:
+    '''
+    def sierpinski_subdivide_path(multipath, radius, curr_layer):
+        '''
+        generates a multipath of the next layer from the present layer.
+        :param multipath:
+        :param curr_layer:
+        :return:
+        '''
+        n_triangles = 3**curr_layer
+
+        ts=np.linspace(0,1,n_triangles+1)
+        new_t_ints = np.stack((ts[:n_triangles],ts[1:]),axis=-1)
+        new_scales = np.ones(n_triangles)
+        ang_extensions = np.arange(3)*2*np.pi/3
+        coords_shifts = np.stack((np.cos(ang_extensions),np.sin(ang_extensions)),axis=-1)*\
+                        (.5**curr_layer)*radius
+
+        new_pathlist = [[]] * n_triangles
+        for ind,path in enumerate(multipath.path_list):
+            new_pathlist[ind*3:(ind+1)*3] = [
+                path*.5 + coords_shifts[i]
+                for i in range(3)]
+
+        return MultiPath(new_pathlist,new_t_ints,new_scales)
+
+
+    center = center if center is not None else np.zeros(2)
+
+    start_triangle = Path(RegPolygon(3,radius).coords,loop=True)
+    sier_triangle = MultiPath([start_triangle],[[0,1]],[1],)
+    for i in range(n_layers):
+        sier_triangle = sierpinski_subdivide_path(sier_triangle,radius,i+1)
+
+    return sier_triangle + center
