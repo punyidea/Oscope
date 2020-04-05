@@ -199,11 +199,6 @@ class Path(object):
         :param t:
         :return:
         '''
-        # n_knots = len(coords)
-        # rel_inds = np.arange(-k_interp + 1, k_interp + n_knots)
-        # t = t[rel_inds % n_knots]
-        # t[rel_inds < 0] -= 1; t[rel_inds >= n_knots] += 1
-        # coords = coords[rel_inds % n_knots]
         t = np.append(t,1)
         coords = coords[np.arange(len(coords) + 1) % len(coords)]
         return coords,t
@@ -236,9 +231,7 @@ class Path(object):
         center = self.center + other
 
         res.reset_coords(coords, center, reparam=reparameterize)
-        #res.update_spline_coords()
         return res
-
 
     def __radd__(self,other):
         return self.__add__(other)
@@ -254,29 +247,30 @@ class Path(object):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot addition modules.'))
         else:
-            return self._mul_const(other,reparameterize=True)
-
+            return self._scale_by_const(other, reparameterize=True)
 
     def __imul__(self, other):
         if issubclass(type(other),Path):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot multiplication modules.'))
         else:
-            self._mul_const(other,reparameterize=True,out=self)
+            self._scale_by_const(other, reparameterize=True, out=self)
             return self
 
-
-    def _mul_const(self, other,reparameterize=True,out=None):
+    def _scale_by_const(self, other, center=None, reparameterize=True, out=None):
         '''
         Scales coordinates about the object's center.
         :param other: a vector, or scalar by which each coordinate is multiplied to obtain the final result.
         :return:
         '''
         res = copy.deepcopy(self) if out is None else out
+        center = self.center if center is None else np.array(center)
+        assert(center.shape == (res.ndims,))
 
         other = np.array(other)
         assert(len(other.shape)<=1)
-        coords = (self.coords-self.center) * other + self.center
+
+        coords = (self.coords-center) * other + center
         center = self.center
 
         res.reset_coords(coords, center, reparam=reparameterize)
@@ -351,14 +345,13 @@ class Path(object):
         assert(A.k_interp >0 and A.k_interp == int(A.k_interp))
 
     @staticmethod
-    def add_exact_coords(A, B): #reparameterize = True):
+    def add_exact_coords(A, B, reparameterize = True):
         '''
 
         Adds two Paths, based on exact knot coordinates.
         This is achieved by interspersing the knots according to t. In particular, when two polygons are added,
         the result has the shape obtained when adding for every A(t) + B(t).
         If reparameterize is true, the result is then reparameterized so that it passes along the shape with constant arc length.
-            #TODO: implement reparameterize logic.
         Result is found on intersection of t domains.
         Note: For looping shapes, it is absolutely important that parameterization be [0,1].
         :param A,B: Two Path objects, which we will add knot coordinates to make a new Path.
@@ -401,14 +394,16 @@ class Path(object):
 
         res = copy.deepcopy(A)
         res.reset_coords(coords, center, reparam=True)
+        if not reparameterize:
+            res.reparameterize(final_t)
 
         res.update_spline_coords()
         return res
+
     @staticmethod
     def calc_path_lengths(coords):
         diff_var = np.diff(coords,axis=0)
         return np.sqrt(np.einsum('ij,ij->i',diff_var,diff_var))
-
 
     @staticmethod
     def get_cum_path_len(coords):
@@ -441,7 +436,7 @@ class MultiPath(object):
     An object that stores the concatenation of multiple paths.
     TODO: Redo operator logic, to be cleaner.
     '''
-    def __init__(self,path_list,t_ints, scales, t_int_from_path_len=False, center = None, tot_len = None):
+    def __init__(self,path_list,t_ints, t_int_from_path_len=False, center = None, tot_len = None):
         '''
 
         :param path_list: length of number of paths used.
@@ -451,66 +446,124 @@ class MultiPath(object):
         :param scales:
         '''
 
-        (path_list,t_ints,scales,center),ndims = self._valid_inputs(path_list,t_ints,scales,center)
+        (path_list,t_ints,center),ndims = self._valid_inputs(path_list,t_ints,center)
         n_paths = len(path_list)
         if t_int_from_path_len and t_ints is None:
             t_ints = self.t_ints_from_path_lens(path_list)
 
-        scales = make_list(scales)
+
         t_ints = [t_ints[0]] * len(path_list) if len(t_ints) == 1 else t_ints
-        scales = [scales[0]] * len(path_list) if len(scales) == 1 else scales
 
         self.path_list = make_list(copy.deepcopy(path_list))
-        self.scales = np.ones((n_paths,ndims))
-        for i in range(n_paths):
-            self.scales[i] *= scales[i]
+
+
         self.t_ints = np.array(t_ints)
         self.center = np.array(center) if center is not None else np.zeros(ndims)
         self.tot_len = tot_len if tot_len is not None else  sum((path.tot_len for path in path_list))
         self.ndims = ndims #number of dimensions of the path.
 
     def __add__(self,other):
-
         if issubclass(type(other),MultiPath):
-            if other.ndims != self.ndims:
-                raise ValueError('Adding values with inconsistent dimensions. self:{} != other:{}'.format(
-                    self.ndims,other.ndims))
-            path_list = self.path_list + other.path_list
-            t_ints = np.concatenate((self.t_ints, other.t_ints),axis=0)
-            scales = np.concatenate((self.scales,other.scales), axis=0)
-            tot_len = self.tot_len + other.tot_len
-            center =self.center + other.center
-
+            return self._add_mult_path(other)
         else:
-            path_list = [path + other for path in self.path_list]
-            t_ints = self.t_ints
-            scales = self.scales
-            tot_len = self.tot_len
-            center = self.center + other
-
-        return self.__class__(path_list, t_ints, scales,
-                              tot_len=tot_len, center=center)
+            return self._add_const(other)
 
     def __iadd__(self, other):
         if issubclass(type(other), MultiPath):
-            if other.ndims != self.ndims:
-                raise ValueError('Adding values with inconsistent dimensions. self:{} != other:{}'.format(
-                    self.ndims,other.ndims))
-            self.path_list +=  other.path_list
-            self.t_ints += other.t_ints
-            self.scales +=  other.scales
-            self.tot_len += other.tot_len
-            self.center +=  other.center
+            return self._add_mult_path(other,out=self)
         else:
-            for path,ind in enumerate(self.path_list):
-                self.path_list[ind] += other
-            self.center +=other
+            return self._add_const(other,out=self)
+
+    def _add_const(self,other,out=None):
+        other = np.array(other)
+        assert(len(other.shape)<=1)
+        res = copy.deepcopy(self) if out is None else out
+        for path in res.path_list:
+            path.add_const(other,out=path)
+
+        res.center +=  other
+
+        #res.update_spline_coords()
+        return res
+
+    def _add_mult_path(self,other,out=None):
+        assert(self.ndims ==other.ndims)
+        res = copy.deepcopy(self) if out is None else out
+        res.path_list +=other.path_list
+        res.t_ints +=other.t_ints
+        res.tot_len += other.tot_len
+        res.center += other.center
+        return res
 
     def __radd__(self, other):
         return self.__add__(other)
 
+    def scale_by_path_center(self,other,out=None):
+        '''
+        Scales each constituent path in the object by scaling factor other, wrt its center.
+        Applies recursively if it's multipath.
+        :param other:
+        :param out:
+        :return:
+        '''
+        res = copy.deepcopy(self) if out is None else out
+        for path in res.path_list:
+            path._scale_by_const(other,out=path,reparameterize=True)
+        self.update_tot_len()
+
+        return res
+
+    def _scale_by_const(self, other, center = None, out= None):
+        '''
+        Scales the
+        :param other:
+        :param center:
+            If None, scales by the MultiPath's center.
+
+        :param out:
+        :return:
+        '''
+        center = np.array(center) if center is not None else self.center
+        assert(center.shape == (self.ndims,))
+
+        res = copy.deepcopy(self) if out is None else out
+        for path in res.path_list:
+            path._scale_by_const(other,out=path, center=center)
+        self.update_tot_len()
+
+        return res
+
+    def __mul__(self, other):
+        if issubclass(type(other), Path):
+            raise (NotImplementedError('Path multiplication is ambiguous. '
+                                       'Use one of the supported path_rot addition modules.'))
+        else:
+            return self._scale_by_const(other)
+
+    def __imul__(self, other):
+        if issubclass(type(other), Path):
+            raise (NotImplementedError('Path multiplication is ambiguous. '
+                                       'Use one of the supported path_rot multiplication modules.'))
+        else:
+            return self._scale_by_const(other,out=None)
+
+    def __rmul__(self, other):
+        return self.__mul__(other)
+
+    def __neg__(self):
+        return -1 * self
+
+    def __sub__(self, other):
+        return self + -other
+
+    def __rsub__(self, other):
+        return -self + other
+
+    def update_tot_len(self):
+        self.tot_len = sum((path.tot_len for path in self.path_list))
+
     @staticmethod
-    def _valid_inputs(path_list,t_ints,scales,center):
+    def _valid_inputs(path_list,t_ints,center):
 
         #check t_ints, make sure it is a list of lists. If not, make it one.
         if check_listlike(t_ints):
@@ -528,11 +581,11 @@ class MultiPath(object):
 
         # check length of elements
         try:
-            lens = np.fromiter(map(len, [path_list, t_ints if t_ints is not None else [1], scales]), int,
+            lens = np.fromiter(map(len, [path_list, t_ints if t_ints is not None else [1]]), int,
                                count=3)
         except TypeError:
             raise ValueError(
-                'Unexpected type encountered in input. Check path_list,t_ints,scales are iterable.')
+                'Unexpected type encountered in input. Check path_list,t_ints are iterable.')
 
         #check path_list
         for ind, path in enumerate(path_list):
@@ -551,9 +604,9 @@ class MultiPath(object):
 
         if not np.all(np.logical_or(lens==1 ,lens == max(lens)))\
                 or lens[0] !=max(lens) or max(lens)<1:
-            raise ValueError('Invalid Length assigment. Path_list,t_ints,scales size= {}'.format(lens))
+            raise ValueError('Invalid Length assigment. Path_list,t_ints size= {}'.format(lens))
 
-        return (path_list,t_ints,scales,center),ndims
+        return (path_list,t_ints,center),ndims
 
     @staticmethod
     def get_dim_path_list(path_list):
@@ -593,7 +646,6 @@ class MultiPath(object):
         inds = np.argsort(self.t_ints[:,0])
         self.path_list = [self.path_list[ind] for ind in inds]
         self.t_ints = self.t_ints[inds]
-        self.scales = self.scales[inds]
 
     def eval_coords(self,des_t,ret_assigned_vals=False):
         '''
@@ -621,7 +673,7 @@ class MultiPath(object):
                 coords,invalid_cond = path.eval_coords(eval_ts,ret_assigned_vals=True)
             else:
                 coords= path.eval_coords(eval_ts)
-            eval_coords += self.scales[ind]*coords
+            eval_coords += coords
             assigned_ts |= ~invalid_cond
 
         if ret_assigned_vals:
@@ -683,6 +735,7 @@ class MultiPath(object):
 class Polygon(Path):
     k_interp_cls = 1
 
+
 class RegPolygon(Polygon):
     '''
     Convenience class for making regular polygons (in 2d).
@@ -713,6 +766,7 @@ class RegPolygon(Polygon):
         angs = np.arange(n_sides) *np.pi*2/n_sides+ ang_offset
         coords = radius*np.stack((np.cos(angs),np.sin(angs)),axis=-1) + center
         super().__init__(coords, center=center,loop=True,**kwargs)
+
 
 def make_sierpinski_triangle(n_layers,radius,center=None):
     '''
