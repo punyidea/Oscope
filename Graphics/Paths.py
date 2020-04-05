@@ -436,27 +436,26 @@ class MultiPath(object):
     An object that stores the concatenation of multiple paths.
     TODO: Redo operator logic, to be cleaner.
     '''
-    def __init__(self,path_list,t_ints, t_int_from_path_len=False, center = None, tot_len = None):
+    def __init__(self,path_list,t_ints=None, center = None, tot_len = None):
         '''
 
         :param path_list: length of number of paths used.
         :param t_ints: The sub-interval of the
-        For convenience, can be length 1. Also, if t_int_from_path_len=True
-
+        For convenience, can be length 1, in which case it is applied to all paths (that is, all paths will be added.
+        If this parameter is not set, the default is to concatenate all paths
+        and weight them according to their collective path lengths.
         :param scales:
         '''
 
         (path_list,t_ints,center),ndims = self._valid_inputs(path_list,t_ints,center)
         n_paths = len(path_list)
-        if t_int_from_path_len and t_ints is None:
+        if  t_ints is None:
             t_ints = self.t_ints_from_path_lens(path_list)
 
-
-        t_ints = [t_ints[0]] * len(path_list) if len(t_ints) == 1 else t_ints
+        #If t_ints was set to be one interval, and there is more than one path, replicate it.
+        t_ints = [t_ints[0]] * len(path_list) if n_paths > len(t_ints) == 1  else t_ints
 
         self.path_list = make_list(copy.deepcopy(path_list))
-
-
         self.t_ints = np.array(t_ints)
         self.center = np.array(center) if center is not None else np.zeros(ndims)
         self.tot_len = tot_len if tot_len is not None else  sum((path.tot_len for path in path_list))
@@ -479,18 +478,16 @@ class MultiPath(object):
         assert(len(other.shape)<=1)
         res = copy.deepcopy(self) if out is None else out
         for path in res.path_list:
-            path.add_const(other,out=path)
+            path._add_const(other,out=path)
 
         res.center +=  other
-
-        #res.update_spline_coords()
         return res
 
     def _add_mult_path(self,other,out=None):
         assert(self.ndims ==other.ndims)
         res = copy.deepcopy(self) if out is None else out
         res.path_list +=other.path_list
-        res.t_ints +=other.t_ints
+        res.t_ints =np.concatenate((res.t_ints,other.t_ints),axis=0)
         res.tot_len += other.tot_len
         res.center += other.center
         return res
@@ -529,7 +526,7 @@ class MultiPath(object):
         res = copy.deepcopy(self) if out is None else out
         for path in res.path_list:
             path._scale_by_const(other,out=path, center=center)
-        self.update_tot_len()
+        res.update_tot_len()
 
         return res
 
@@ -582,7 +579,7 @@ class MultiPath(object):
         # check length of elements
         try:
             lens = np.fromiter(map(len, [path_list, t_ints if t_ints is not None else [1]]), int,
-                               count=3)
+                               count=2)
         except TypeError:
             raise ValueError(
                 'Unexpected type encountered in input. Check path_list,t_ints are iterable.')
@@ -649,6 +646,7 @@ class MultiPath(object):
 
     def eval_coords(self,des_t,ret_assigned_vals=False):
         '''
+        #TODO: add logic for endpoint. Should we support loops too?
         Sums along all paths which are "valid" in a interval.
         To support concatenation, the range is min_t (inclusive) to max_t (exclusive)
         :param des_t:
@@ -681,57 +679,7 @@ class MultiPath(object):
         else:
             return eval_coords
 
-
-    def _mul_const(self, other):
-        #TODO: fix
-         scales = self.scales * other
-         center = self.center * other
-         ret_obj = copy.deepcopy(self)
-
-         # total scaling. TODO: fix tot_len logic, implementing function to compute it.
-         other_arr = np.atleast_2d(other)
-         scale_fact = np.mean(np.sqrt(np.einsum('ij,ij->i', other_arr, other_arr)))
-         tot_len = self.tot_len * scale_fact
-
-         ret_obj.tot_len = tot_len
-         ret_obj.scales = scales
-         ret_obj.center = center
-         return ret_obj
-
-
-    def __mul__(self, other):
-        if issubclass(type(other),Path):
-            raise(NotImplementedError('Path multiplication is ambiguous. '
-                                      'Use one of the supported path_rot addition modules.'))
-        else:
-            return self._mul_const(other)
-
-    def __imul__(self, other):
-        if issubclass(type(other),Path):
-            raise(NotImplementedError('Path multiplication is ambiguous. '
-                                      'Use one of the supported path_rot multiplication modules.'))
-        else:
-            self.scales *= other
-            self.center *= other
-
-            # total scaling.
-            other_arr = np.atleast_2d(other)
-            scale_fact = np.abs(np.mean(np.sqrt(np.einsum('ij,ij->i', other_arr, other_arr))))
-            self.tot_len *= scale_fact
-
-
-    def __rmul__(self,other):
-        return self.__mul__(other)
-
-    def __neg__(self):
-        return -1*self
-
-    def __sub__(self, other):
-        return self + -other
-
-    def __rsub__(self, other):
-        return -self + other
-
+#TODO: Move Polygon up to the top.
 class Polygon(Path):
     k_interp_cls = 1
 

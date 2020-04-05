@@ -36,8 +36,10 @@ def convert_float_dtype(np_array,aud_segment):
     if np.max(np.abs(np_array))>1:
         Warning('Signal is scaled such that values will clip.')
     dtype_seg = determine_dtype(aud_segment)
-    max_scale= -np.iinfo(dtype_seg).min
+    max_scale= np.iinfo(dtype_seg).max
     converted_array = np.asarray(np_array*max_scale,dtype = dtype_seg)
+    if aud_segment.sample_width==1:
+        converted_array +=128
     return  converted_array
 
 def determine_dtype(aud_segment):

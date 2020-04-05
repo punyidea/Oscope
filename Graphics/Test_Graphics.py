@@ -62,8 +62,6 @@ class TestPolygon(unittest.TestCase):
         coord_at_half = poly.eval_coords(.5)
         np_tests.assert_allclose(coord_at_half, self.coords_rect[2])
 
-
-
     def test_add_const(self):
         poly = Polygon(self.coords_int_path) + 1
         np_tests.assert_allclose(poly.t, np.array([0, 1., 6, 10, 14]) / 14.)
@@ -139,20 +137,28 @@ class TestPolygon(unittest.TestCase):
         np_tests.assert_allclose(mult_vect.coords, (self.coords_square*2 + [.2, 3]) )
         np_tests.assert_allclose(mult_vect.center, [.2, 3])
 
+    def test_reg_poly(self):
+        triangle = RegPolygon(3, 1)
+        square = RegPolygon(4, np.sqrt(2), center=(1, 0))
+
+        square_rot90 = RegPolygon(4, np.sqrt(2), center=(1, 0), ang=90)
+        np.testing.assert_allclose(square.coords[np.arange(1, 5) % 4], square_rot90.coords, atol=1e-10)
+        np.testing.assert_allclose(square.t, square_rot90.t)
+        self.assertAlmostEqual(square.tot_len, square_rot90.tot_len)
+        self.assertEqual(square_rot90.k_interp, square.k_interp)
+
 class TestMultiPath(unittest.TestCase):
     coords_shape = np.array([[0, 0], [0, 1], [4, 4], [4, 0], [0, 0]])
     coords_square = np.array([[0,0],[0,1],[1,1],[1,0]])
     path_shape = Polygon(coords_shape)
     path_square = Polygon(coords_square,loop=True)
     def test_init(self):
-        scale = [1]
-        x = MultiPath([self.path_shape, self.path_square], None, scale, t_int_from_path_len=True)
-        y = MultiPath([self.path_shape, self.path_square], [[0, 14. / 18], [14. / 18, 1]], [1, 1])
+        x = MultiPath([self.path_shape, self.path_square], None)
+        y = MultiPath([self.path_shape, self.path_square], [[0, 14. / 18], [14. / 18, 1]])
         np_tests.assert_allclose(x.t_ints,y.t_ints)
-        np_tests.assert_equal(x.scales,y.scales)
         self.assertTrue(x.path_list == y.path_list)
 
-        z = MultiPath([self.path_shape, self.path_square], [[0, 1]], [1], center=[0, 2])
+        z = MultiPath([self.path_shape, self.path_square], [[0, 1]], center=[0, 2])
 
     def test_scale(self):
         y = MultiPath([self.path_shape, self.path_square], [[-1, 13], [13, 17]], [1, 1])
@@ -165,7 +171,7 @@ class TestMultiPath(unittest.TestCase):
         np_tests.assert_allclose(y.t_ints,[[-1.,13],[13.,17]])
 
     def test_add_scalar(self):
-        x = MultiPath([self.path_shape, self.path_square], None, [1], t_int_from_path_len=True)
+        x = MultiPath([self.path_shape, self.path_square], None)
         y = x +1
         np_tests.assert_allclose(y.path_list[0].coords,self.coords_shape+1)
         np_tests.assert_allclose(y.center,[1,1])
@@ -174,14 +180,36 @@ class TestMultiPath(unittest.TestCase):
         np_tests.assert_allclose(y.path_list[0].coords,self.coords_shape+[1,2])
         np_tests.assert_allclose(y.center,[1,2])
 
-    def test_add_mult_paths(self):
-        x = MultiPath([self.path_shape], [0, 1], [1], center=[0,1])
-        y = MultiPath([self.path_square],[0,1],[1], center=[1,0])
+    def test_add_multpaths(self):
+        x = MultiPath([self.path_shape], [0, 1], center=[0,1])
+        y = MultiPath([self.path_square],[0,1], center=[1,0])
         z = x + y
 
         np_tests.assert_allclose(z.t_ints,[[0,1],[0,1]])
-        np_tests.assert_allclose(z.scales,[1,1])
         np_tests.assert_allclose(z.center,[1,1])
+
+        coord_at_half_x = x.eval_coords(.5)
+        coord_at_half_y = y.eval_coords(.5)
+        coord_at_half_z = z.eval_coords(.5)
+        np_tests.assert_allclose(coord_at_half_x + coord_at_half_y,coord_at_half_z)
+        np_tests.assert_allclose(coord_at_half_x,self.path_shape.eval_coords(.5))
+        np_tests.assert_allclose(coord_at_half_y, self.path_square.eval_coords(.5))
+
+    def test_mult_scalar(self):
+        x = MultiPath([self.path_square], [0, 1], center=[0,1])
+        y = x*2
+
+        np_tests.assert_allclose(y.path_list[0].coords,[[0,-1],[0,1],[2,1],[2,-1]])
+        np_tests.assert_allclose(y.t_ints,x.t_ints)
+        np_tests.assert_allclose(y.center,x.center)
+        self.assertAlmostEqual(y.tot_len,8)
+        self.assertAlmostEqual(x.path_list[0].tot_len,4)
+
+        x*=2
+        np_tests.assert_allclose(y.path_list[0].coords,x.path_list[0].coords)
+        np_tests.assert_allclose(x.t_ints,y.t_ints)
+        np_tests.assert_allclose(x.center,y.center)
+        self.assertAlmostEqual(x.tot_len,8)
 
     def test_eval_coord(self):
         x = MultiPath([self.path_square,self.path_square +1], [[0, .2],[.8,1]], [1], center=[1, 0])
@@ -193,20 +221,14 @@ class TestMultiPath(unittest.TestCase):
 
 
 
-    def test_reg_poly(self):
-        triangle = RegPolygon(3,1)
-        square = RegPolygon(4,np.sqrt(2),center=(1,0))
 
-        square_rot90 = RegPolygon(4,np.sqrt(2),center=(1,0), ang=90)
-        np.testing.assert_allclose(square.coords[1:],square_rot90.coords[:4],atol=1e-10)
-        np.testing.assert_allclose(square.t,square_rot90.t)
-        self.assertAlmostEqual(square.tot_len,square_rot90.tot_len)
-        self.assertEqual(square_rot90.k_interp,square.k_interp)
 class TestDraw(unittest.TestCase):
+
     @staticmethod
     def plot_render(path_to_draw,n_points=500):
         path_render = render_path_once(path_to_draw,1,n_points).T
         plt.plot(path_render[0],path_render[1])
+
     def test_plot_path(self):
         self.plot_render(poly_H)
         self.plot_render(Path.add_exact_coords(poly_H, poly_E))
