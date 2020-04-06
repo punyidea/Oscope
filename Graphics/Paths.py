@@ -431,6 +431,43 @@ class Path(object):
 
         return res
 
+class Polygon(Path):
+    k_interp_cls = 1
+
+
+class RegPolygon(Polygon):
+    '''
+    Convenience class for making regular polygons (in 2d).
+    Give number of sides, radius, and center.
+
+    Polygon is assumed to be drawn as endpoints of n_sides equiangular arcs
+        of a circle with center at center and radius radius.
+    Ang is the angle of CCW rotation, in degrees,
+        from having starting coordinate in direction of positive x-axis.
+    Center is a length 2 vector describing the center of the polygon in 2d space.
+        if center is not given, it is assumed to be centered at the origin.
+
+    '''
+    def __init__(self, n_sides, radius, center=None, ang=0, **kwargs):
+
+        if n_sides < 3:
+            raise ValueError('Polygon with fewer than 3 sides chosen.')
+        if radius < 0:
+            raise ValueError('Polygon with negative radius not possible.')
+        if center is not None:
+            center = np.atleast_1d(center)
+            if np.shape(center) != (2,):
+                raise ValueError('Center of 2d polygon has unexpected shape.')
+        else:
+            center = np.zeros(2)
+
+        ang_offset = ang*np.pi/180
+        angs = np.arange(n_sides) *np.pi*2/n_sides+ ang_offset
+        coords = radius*np.stack((np.cos(angs),np.sin(angs)),axis=-1) + center
+        super().__init__(coords, center=center,loop=True,**kwargs)
+
+
+
 class MultiPath(object):
     '''
     An object that stores the concatenation of multiple paths.
@@ -679,41 +716,6 @@ class MultiPath(object):
         else:
             return eval_coords
 
-#TODO: Move Polygon up to the top.
-class Polygon(Path):
-    k_interp_cls = 1
-
-
-class RegPolygon(Polygon):
-    '''
-    Convenience class for making regular polygons (in 2d).
-    Give number of sides, radius, and center.
-
-    Polygon is assumed to be drawn as endpoints of n_sides equiangular arcs
-        of a circle with center at center and radius radius.
-    Ang is the angle of CCW rotation, in degrees,
-        from having starting coordinate in direction of positive x-axis.
-    Center is a length 2 vector describing the center of the polygon in 2d space.
-        if center is not given, it is assumed to be centered at the origin.
-
-    '''
-    def __init__(self, n_sides, radius, center=None, ang=0, **kwargs):
-
-        if n_sides < 3:
-            raise ValueError('Polygon with fewer than 3 sides chosen.')
-        if radius < 0:
-            raise ValueError('Polygon with negative radius not possible.')
-        if center is not None:
-            center = np.atleast_1d(center)
-            if np.shape(center) != (2,):
-                raise ValueError('Center of 2d polygon has unexpected shape.')
-        else:
-            center = np.zeros(2)
-
-        ang_offset = ang*np.pi/180
-        angs = np.arange(n_sides) *np.pi*2/n_sides+ ang_offset
-        coords = radius*np.stack((np.cos(angs),np.sin(angs)),axis=-1) + center
-        super().__init__(coords, center=center,loop=True,**kwargs)
 
 
 def make_sierpinski_triangle(n_layers,radius,center=None):
