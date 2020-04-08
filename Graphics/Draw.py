@@ -1,5 +1,6 @@
 import numpy as np
-from Graphics.Paths import Path,Polygon, MultiPath
+from Graphics.Paths import Path,Polygon
+from Graphics.MultiPath import MultiPath
 
 coords_H = np.array([[-1, -1],
                      [-1, 1],

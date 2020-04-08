@@ -17,7 +17,9 @@ from pydub import AudioSegment
 from Graphics.Draw import poly_H,poly_E,poly_L,\
     path_H,path_L,path_E,\
     render_path_time,render_path_once,render_interpolate_time
-from Graphics.Paths import RegPolygon,Polygon,Path,make_sierpinski_triangle
+from Graphics.Paths import RegPolygon,Polygon,Path
+from Graphics.fractals import make_sierpinski_triangle_multipath,\
+    make_van_koch_snowflake
 
 
 
@@ -125,28 +127,55 @@ class TestRead(unittest.TestCase):
         self.assertTrue(True)
 
     def test_sierpinski(self):
-        test_out = 'sierpinski_triangle_path.wav'
-        f_triangle = 450  # 100 Hz
+        test_out = 'sierpinski_triangle_path.flac'
+        f_triangle = 440  # 100 Hz
         t_per_draw = 1 / f_triangle
-        t_per_letter = 3  # 5 s per triangle
-
-
+        t_per_iter = 3  # 5 s per triangle
         fs = self.fs
 
-
-        norm_triangle = Path(RegPolygon(3,1).coords,loop=True)
+        norm_triangle = RegPolygon(3,1,center=[0,-.25],ang=-30)
         triangle_list = []
         t_per_draw_layer = t_per_draw
         for i in range(5):
-            sier_triangle = make_sierpinski_triangle(i,1)
-            level_coords = render_path_time(sier_triangle,t_per_letter,t_per_draw_layer,fs)
+            sier_triangle = make_sierpinski_triangle_multipath(i,1,center=[0,-.25],ang=90)
+            level_coords = render_path_time(sier_triangle,t_per_iter,t_per_draw_layer,fs)
             t_per_draw_layer *= np.sqrt(3)
             triangle_list.append(level_coords)
 
-        interp_coords = render_interpolate_time(sier_triangle,norm_triangle,t_per_letter,t_per_draw*3,fs)
+        interp_coords = render_interpolate_time(sier_triangle,norm_triangle,t_per_iter,t_per_draw*3,fs)
         triangle_list.append(interp_coords)
 
         full_data = np.concatenate(triangle_list, axis=0)
         animated_data = convert_float_dtype(normalize(full_data), self.aud_seg)
         write_file(test_out, self.aud_seg, animated_data)
         self.assertTrue(True)
+
+    def test_von_koch(self):
+        test_out = 'von_koch.flac'
+        f_path=440
+        t_per_draw = 1/ f_path
+        t_per_iter=3
+        fs= self.fs
+
+        t_per_draw_layer = t_per_draw
+        snowflake_list = []
+        for i in range(5):
+            vk_snow = make_van_koch_snowflake(i, 1)
+            level_coords = render_path_time(vk_snow, t_per_iter, t_per_draw_layer, fs)
+            t_per_draw_layer *= np.sqrt(4)
+            snowflake_list.append(level_coords)
+
+        hexagon_rot = RegPolygon(6,radius=1,ang=90)
+        interp_coords = render_interpolate_time(vk_snow, hexagon_rot, t_per_iter,
+                                                t_per_draw * np.power(2,8/3), fs)
+        snowflake_list.append(interp_coords)
+        hexagon_norm = RegPolygon(6,radius=1,ang=0)
+        interp_coords = render_interpolate_time(hexagon_rot,hexagon_norm,t_per_iter,
+                                                t_per_draw * np.power(2,4/3), fs)
+        snowflake_list.append(interp_coords)
+
+        full_data = np.concatenate(snowflake_list, axis=0)
+        animated_data = convert_float_dtype(normalize(full_data), self.aud_seg)
+        write_file(test_out, self.aud_seg, animated_data)
+        self.assertTrue(True)
+

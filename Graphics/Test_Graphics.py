@@ -3,7 +3,8 @@ import numpy as np
 import numpy.testing as np_tests
 import matplotlib.pyplot as plt
 
-from Graphics.Paths import  Path,Polygon,RegPolygon, MultiPath,make_sierpinski_triangle
+from Graphics.Paths import  Path,Polygon,RegPolygon, MultiPath,\
+    make_sierpinski_triangle_multipath,rot_points2d
 from Graphics.Draw import render_path_once, interp_paths, \
     poly_H, path_H, poly_E, path_E
 
@@ -89,6 +90,12 @@ class TestPolygon(unittest.TestCase):
         self.assertAlmostEqual(coord_at_half[0], 3)
 
     def test_rot2d(self):
+
+        coord = np.array((.5,.5),)
+        rot_coord=rot_points2d(coord,90,np.array((0,0)))
+        np_tests.assert_allclose(rot_coord,(-.5,.5))
+        rot_coord=rot_points2d(coord,90,np.array((1,0)))
+        np_tests.assert_allclose(rot_coord,(.5,-.5))
         rect = Polygon(self.coords_rect,loop=True)
         vert_rect = Path.rot2d(rect,90)
         coord_at_half = vert_rect.eval_coords(.5)
@@ -211,15 +218,45 @@ class TestMultiPath(unittest.TestCase):
         np_tests.assert_allclose(x.center,y.center)
         self.assertAlmostEqual(x.tot_len,8)
 
-    def test_eval_coord(self):
-        x = MultiPath([self.path_square,self.path_square +1], [[0, .2],[.8,1]], [1], center=[1, 0])
+    def test_rot(self):
+        x = MultiPath([self.path_shape], [0, 1], center=[0, 1])
+        y = MultiPath([self.path_square], [0, 1], center=[0, 1])
+        z = x + y
 
-        coords_eval = x.eval_coords(np.array([.1,.16,.75,.95]))
+        x_rot = x.rot2d(180,center=[0,0])
+        np_tests.assert_allclose(x_rot.path_list[0].coords,-x.path_list[0].coords,atol=1e-10)
+
+        y_rot = y.rot2d(90)
+        np_tests.assert_allclose(y_rot.path_list[0].coords,
+                                [[1,1],[0,1],[0,2],[1,2]],atol=1e-10)
+
+        x_nested = MultiPath([x],[0,1],center=[0,0])
+        x_nested.rot2d_inplace(180)
+        np_tests.assert_allclose(x_nested.path_list[0].path_list[0].coords, -x.path_list[0].coords, atol=1e-10)
+
+    def test_eval_coord(self):
+        x = MultiPath([self.path_square,self.path_square +1], [[0, .2],[.8,1]], center=[1, 0])
+
+        coords_eval,assigned_ts = x.eval_coords(np.array([.1,.16,.75,.95,1]),ret_assigned_vals=True)
         np_tests.assert_allclose(coords_eval[0], [1,1])
-        np_tests.assert_allclose(coords_eval[-1], [2,1])
+        np_tests.assert_allclose(coords_eval[-2], [2,1])
+        np_tests.assert_allclose(coords_eval[-1], [1,1])
+        self.assertTrue(np.all(assigned_ts ==[True, True,False,True,True]))
+
+        y = MultiPath([self.path_square, self.path_square + 1], [[0, .5], [.5, 1]], center=[1, 0])
+
+        coords_half= y.eval_coords(.5)
+        np_tests.assert_allclose(coords_half, [1, 1])
+
         #self.assertAlmostEqual(coord_at_half[0], 5)
 
+    def test_flattened(self):
+        x = MultiPath([self.path_square,self.path_square +1], [[0, .2],[.8,1]], center=[1, 0])
 
+        y = MultiPath([x,x-1,self.path_square],[[0,.5],[0.5,1],[0.5,1]])
+
+        y.flattened(out=y)
+        np_tests.assert_allclose(y.t_ints,[[0,.1],[.4,.5],[.5,.6],[.5,1],[.9,1]])
 
 
 class TestDraw(unittest.TestCase):
@@ -246,15 +283,13 @@ class TestDraw(unittest.TestCase):
     def test_plot_sierpinski(self):
         plot_render = lambda x: plt.plot(x[0],x[1])
 
-        one_iter = make_sierpinski_triangle(1,1)
+        one_iter = make_sierpinski_triangle_multipath(1,1)
         self.plot_render(one_iter)
 
-        two_iter = make_sierpinski_triangle(2,.5,[0,.5])
-        self.plot_render(two_iter)
-
-
-
-
+        plt.clf()
+        three_iter = make_sierpinski_triangle_multipath(3,.5,center=[0,.5],ang=90)
+        self.plot_render(three_iter)
+        a=1
 
 
 if __name__ == '__main__':
