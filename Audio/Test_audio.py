@@ -17,7 +17,7 @@ from pydub import AudioSegment
 from Graphics.Draw import poly_H,poly_E,poly_L,\
     path_H,path_L,path_E,\
     render_path_time,render_path_once,render_interpolate_time
-from Graphics.Paths import RegPolygon,Polygon,Path
+from Graphics.Paths import RegPolygon,Polygon,SplinePath
 from Graphics.fractals import make_sierpinski_triangle_multipath,\
     make_van_koch_snowflake
 

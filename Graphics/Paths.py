@@ -8,6 +8,11 @@ from .utils import compute_rotmat,rot_points2d,make_list, check_listlike
 
 
 class Path(object):
+
+    def eval_coords(self, des_t):
+        raise(NotImplementedError('Abstract class has no such method.'))
+
+class SplinePath(Path):
     '''
     k_interp is the k used in spline interpolation. 3 in default path_rot, and 1 for a polygon.
     '''
@@ -192,13 +197,13 @@ class Path(object):
 
 
     def __add__(self, other):
-        if issubclass(type(other),Path):
+        if issubclass(type(other), SplinePath):
             raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path_rot addition modules.'))
         else:
             return self._add_const(other)
 
     def __iadd__(self, other):
-        if issubclass(type(other),Path):
+        if issubclass(type(other), SplinePath):
             raise(NotImplementedError('Path addition is ambiguous. Use one of the supported path_rot addition modules.'))
         else:
             self._add_const(other,reparameterize=False,out=self)
@@ -230,14 +235,14 @@ class Path(object):
         :param other:
         :return:
         '''
-        if issubclass(type(other),Path):
+        if issubclass(type(other), SplinePath):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot addition modules.'))
         else:
             return self._scale_by_const(other, reparameterize=True)
 
     def __imul__(self, other):
-        if issubclass(type(other),Path):
+        if issubclass(type(other), SplinePath):
             raise(NotImplementedError('Path multiplication is ambiguous. '
                                       'Use one of the supported path_rot multiplication modules.'))
         else:
@@ -351,8 +356,8 @@ class Path(object):
         :return: A new Path object, defined on the intersection of their domains.
                 In the case of a loop, it's a new loop defined on [0,1].
         '''
-        Path.validate_path(A)
-        Path.validate_path(B)
+        SplinePath.validate_path(A)
+        SplinePath.validate_path(B)
 
         if A.ndims != B.ndims:
             raise ValueError('Dimension mismatch between add args. A.coords_int_path shape: {}. B.coords_int_path shape: {}'.format(
@@ -400,13 +405,13 @@ class Path(object):
 
     @staticmethod
     def get_cum_path_len(coords):
-        seg_lens = Path.calc_path_lengths(coords)
+        seg_lens = SplinePath.calc_path_lengths(coords)
         t_raw = np.cumsum(np.concatenate(([0],seg_lens)))
         return t_raw
 
     @staticmethod
     def get_tot_len(coords):
-        return sum(Path.calc_path_lengths(coords))
+        return sum(SplinePath.calc_path_lengths(coords))
 
     def eval_coords(self,des_t):
         '''
@@ -424,7 +429,7 @@ class Path(object):
 
         return res
 
-class Polygon(Path):
+class Polygon(SplinePath):
     k_interp_cls = 1
 
 

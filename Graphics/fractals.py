@@ -1,5 +1,5 @@
 import numpy as np
-from Graphics.Paths import Path,RegPolygon,Polygon
+from Graphics.Paths import SplinePath,RegPolygon,Polygon
 from Graphics.MultiPath import MultiPath
 
 

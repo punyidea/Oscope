@@ -1,5 +1,5 @@
 import numpy as np
-from Graphics.Paths import Path,Polygon
+from Graphics.Paths import SplinePath,Polygon
 from Graphics.MultiPath import MultiPath
 
 coords_H = np.array([[-1, -1],
@@ -16,7 +16,7 @@ coords_H = np.array([[-1, -1],
                      [-1. / 3, -1],
                      ])
 poly_H = Polygon(coords_H,loop=True)
-path_H = Path(coords_H,loop=True)
+path_H = SplinePath(coords_H, loop=True)
 coords_E = np.array([[-1, -1],
                      [-1, 1],
                      [1, 1],
@@ -31,7 +31,7 @@ coords_E = np.array([[-1, -1],
                      [1, -1],
                      ])
 poly_E = Polygon(coords_E,loop=True)
-path_E = Path(coords_E,loop=True)
+path_E = SplinePath(coords_E, loop=True)
 
 coords_L = np.array([[-1, -1],
                      [-1, 1],
@@ -42,7 +42,7 @@ coords_L = np.array([[-1, -1],
                      ]
                     )
 poly_L = Polygon(coords_L,loop=True)
-path_L = Path(coords_L,loop=True)
+path_L = SplinePath(coords_L, loop=True)
 
 
 
