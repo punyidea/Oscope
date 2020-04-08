@@ -117,7 +117,7 @@ class MultiPath(object):
             raise (NotImplementedError('Path multiplication is ambiguous. '
                                        'Use one of the supported path_rot multiplication modules.'))
         else:
-            return self._scale_by_const(other,out=None)
+            return self._scale_by_const(other,out=self)
 
     def __rmul__(self, other):
         return self.__mul__(other)

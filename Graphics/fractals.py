@@ -97,8 +97,8 @@ def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
         scaled_path = van_koch_line*(1./3)
         pathlist = [
                     scaled_path + [1. / 3, 0],
-                    (scaled_path + [1. / 12, np.sqrt(3) / 12]).rot2d(-60),
-                    (scaled_path + [-1./12,np.sqrt(3)/12]).rot2d(60),
+                    (scaled_path + [1. / 12, np.sqrt(3) / 12]).rot2d_inplace(-60),
+                    (scaled_path + [-1./12,np.sqrt(3)/12]).rot2d_inplace(60),
                     scaled_path - [1. / 3, 0],
                     ]
 
@@ -112,7 +112,6 @@ def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
         for i in range(n_iters):
             vk_seg = construct_next_iter_seg(vk_seg)
         return vk_seg
-
 
     radius = np.array(radius)
     center = center if center is not None else np.zeros(2)
