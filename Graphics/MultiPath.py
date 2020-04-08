@@ -1,7 +1,7 @@
 import numpy as np
 import numpy.ma as ma
 import copy as copy
-from Graphics.Paths import Path
+from Graphics.Paths import SplinePath
 from Graphics.utils import  check_listlike, rot_points2d,make_list
 
 
@@ -106,14 +106,14 @@ class MultiPath(object):
         return res
 
     def __mul__(self, other):
-        if issubclass(type(other), Path):
+        if issubclass(type(other), SplinePath):
             raise (NotImplementedError('Path multiplication is ambiguous. '
                                        'Use one of the supported path_rot addition modules.'))
         else:
             return self._scale_by_const(other)
 
     def __imul__(self, other):
-        if issubclass(type(other), Path):
+        if issubclass(type(other), SplinePath):
             raise (NotImplementedError('Path multiplication is ambiguous. '
                                        'Use one of the supported path_rot multiplication modules.'))
         else:
@@ -163,10 +163,10 @@ class MultiPath(object):
 
         #check path_list
         for ind, path in enumerate(path_list):
-            if not issubclass(type(path), (Path,MultiPath)):
+            if not issubclass(type(path), (SplinePath, MultiPath)):
                 raise ValueError(
                     'Path entry at index {} is not instance of Path or MultiPath. Type:{}'.format(ind, type(path)))
-            elif issubclass(type(path),Path):
+            elif issubclass(type(path), SplinePath):
                 if path.spline_mod[0].min() >0 or path.spline_mod[0].max() <1:
                     Warning('Multipath will potentially extrapolate path at index {}'.format(ind))
         ndims = MultiPath.get_dim_path_list(path_list)
