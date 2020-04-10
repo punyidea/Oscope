@@ -179,3 +179,71 @@ class TestRead(unittest.TestCase):
         write_file(test_out, self.aud_seg, animated_data)
         self.assertTrue(True)
 
+
+    def test_von_koch_song(self):
+        test_out = 'von_koch.flac'
+        f_path=440
+        t_per_draw = 1/ f_path
+        t_per_iter=3
+        fs= self.fs
+
+        t_per_draw_layer = t_per_draw
+        snowflake_list = []
+        for i in range(5):
+            vk_snow = make_van_koch_snowflake(i, 1)
+            level_coords = render_path_time(vk_snow, t_per_iter, t_per_draw_layer, fs)
+            t_per_draw_layer *= np.sqrt(4)
+            snowflake_list.append(level_coords)
+
+        hexagon_rot = RegPolygon(6,radius=1,ang=90)
+        interp_coords = render_interpolate_time(vk_snow, hexagon_rot, t_per_iter,
+                                                t_per_draw * np.power(2,8/3), fs)
+        snowflake_list.append(interp_coords)
+        hexagon_norm = RegPolygon(6,radius=1,ang=0)
+        interp_coords = render_interpolate_time(hexagon_rot,hexagon_norm,t_per_iter,
+                                                t_per_draw * np.power(2,4/3), fs)
+        snowflake_list.append(interp_coords)
+
+        full_data = np.concatenate(snowflake_list, axis=0)
+        animated_data = convert_float_dtype(normalize(full_data), self.aud_seg)
+        write_file(test_out, self.aud_seg, animated_data)
+        self.assertTrue(True)
+
+
+    def test_circle_van_koch(self):
+        test_out='van_koch_giants.flac'
+        aud_seg = AudioSegment.from_file(test_file)
+
+        first_50_seconds = aud_seg[:50000]
+        fs = aud_seg.frame_rate
+        data_to_process = np.array(first_50_seconds.get_array_of_samples()).reshape([-1, 2])
+        max_val, orig_dtype = np.abs(data_to_process).max(), data_to_process.dtype
+        data_to_process = np.asarray(data_to_process, dtype='float64') / max_val
+        data_to_process = np.mean(data_to_process,axis=1)
+
+        H = hilbert(data_to_process)
+        [X, Y] = np.real(H), np.imag(H)
+
+        t_per_draw = .653
+        t_per_iter = t_per_draw*8
+
+        snowflake_list=[]
+        for i in range(5):
+            vk_snow = make_van_koch_snowflake(i, 1)
+            level_coords = render_path_time(vk_snow, t_per_iter, t_per_draw, fs)
+            #t_per_draw *= np.sqrt(4)
+            snowflake_list.append(level_coords)
+
+        dot = vk_snow*0.0001
+        interp_coords = render_interpolate_time(vk_snow,dot,t_per_iter,
+                                                t_per_draw * np.power(2,4/3), fs)
+        snowflake_list.append(interp_coords)
+
+        snowflake_data = np.concatenate(snowflake_list, axis=0)
+        full_data = np.stack((X,Y),axis=-1)
+        full_data *= .03
+
+        full_data[:len(snowflake_data)] += snowflake_data
+        animated_data = convert_float_dtype(normalize(full_data), self.aud_seg)
+        write_file(test_out, self.aud_seg, animated_data)
+

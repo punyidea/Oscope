@@ -116,6 +116,8 @@ def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
     radius = np.array(radius)
     center = center if center is not None else np.zeros(2)
     v_k_seg = make_van_koch_segment(n_iters)
+    if n_iters >0:
+        v_k_seg.flattened(out=v_k_seg)
 
     snowflake_offs_angs = (np.arange(6) + 3/2) * 2*np.pi/6
     seg_offs = np.stack([np.cos(snowflake_offs_angs),np.sin(snowflake_offs_angs)],axis=-1)*np.sqrt(3)/2
