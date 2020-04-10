@@ -10,6 +10,7 @@ import matplotlib.pyplot as plt
 from Audio.circle_transform import circle_transform
 from Audio.sound_io import convert_float_dtype,write_file
 from Audio.preprocess import normalize
+from Audio.Tones import Tone
 import os
 #os.environ['PATH'] += ":/usr/local/Cellar/ffmpeg/4.2.2_1/bin:"
 print(os.environ['PATH'])
@@ -25,6 +26,16 @@ from Graphics.fractals import make_sierpinski_triangle_multipath,\
 
 test_file = '/Users/vsp/Music/iTunes/iTunes Media/Music/Kimya Dawson/Remember That I Love You/07 I Like Giants.m4a'
 test_out = 'animated_hell_path.mp4'
+
+class TestTones(unittest.TestCase):
+    square = RegPolygon(4,np.sqrt(2)/2,ang=45)
+    triangle = RegPolygon(3,np.sqrt(3)/2,ang=-30)
+    def test_init(self):
+        tone_1 = Tone([self.square],[1,2,3])
+        tone_2 = Tone([self.square,self.triangle],[1,1])
+    def test_eval_coord(self):
+        pass
+
 
 
 
