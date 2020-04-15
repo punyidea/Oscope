@@ -1,3 +1,5 @@
+
+
 import numpy as np
 import music21 as m21
 from music21.note import Note
@@ -9,7 +11,6 @@ def ratio_to_halfsteps(rat):
     return 12 * math.log(rat, 2)
 
 def gen_comma_meas(start_pitch,note_len):
-    #note_len = start_note.duration.quarterLength
 
     p5 = m21.interval.Interval(ratio_to_halfsteps(3/2))
     p8 = m21.interval.Interval(ratio_to_halfsteps(2))
@@ -51,9 +52,11 @@ def gen_comma_meas(start_pitch,note_len):
     for note in treb_notes:
         treb_meas.append(note)
 
-    #p15 = m21.interval.Interval('p15')
-    #p31 = m21.interval.add([p15,p15])
-    #extra_meas = m21.stream.Measure([bass_meas.transpose(p15),bass_meas.transpose(p15.reverse()),
+    # Following code attempted to make a shepard tone out of the comma pump.
+    # Sound rendering was not good with current synths.
+    # p15 = m21.interval.Interval('p15')
+    # p31 = m21.interval.add([p15,p15])
+    # extra_meas = m21.stream.Measure([bass_meas.transpose(p15),bass_meas.transpose(p15.reverse()),
                                      #  treb_meas.transpose(p15),treb_meas.transpose(p15.reverse()),
                                      # bass_meas.transpose(p31), bass_meas.transpose(p31.reverse()),
                                      # treb_meas.transpose(p31), treb_meas.transpose(p31.reverse()),
@@ -62,23 +65,30 @@ def gen_comma_meas(start_pitch,note_len):
 
     return (bass_meas,treb_meas),end_pitch
 
-
-if __name__=='__main__':
-    start_pitch = m21.pitch.Pitch('A4')
-    note_len=1
-
-    n_measures = 400
-    bass_part = m21.stream.Part()#m21.instrument.Piano())
-    treb_part = m21.stream.Part()#m21.instrument.Piano())
-    ottava_part=m21.stream.Part()#m21.instrument.Piano())
+def make_comma_pump(start_pitch,note_len,n_measures):
+    bass_part = m21.stream.Part()  # m21.instrument.Piano())
+    treb_part = m21.stream.Part()  # m21.instrument.Piano())
+    #ottava_part = m21.stream.Part()  # m21.instrument.Piano())
 
     for i in range(n_measures):
-        (bass_meas,treb_meas), start_pitch = gen_comma_meas(start_pitch,note_len)
-        bass_part.append(bass_meas);treb_part.append(treb_meas);#ottava_part.append((ottava_meas))
+        (bass_meas, treb_meas), start_pitch = gen_comma_meas(start_pitch, note_len)
+        bass_part.append(bass_meas)
+        treb_part.append(treb_meas)  # ottava_part.append((ottava_meas))
 
-    final_score = m21.stream.Score([treb_part,bass_part])#,ottava_part])
+    final_score = m21.stream.Score([treb_part, bass_part])  # ,ottava_part])
+    return final_score
+
+
+if __name__=='__main__':
+    start_pitch = m21.pitch.Pitch('A3')
+    note_len=1
+    n_measures = 2
+
+    final_score = make_comma_pump(start_pitch,note_len,n_measures)
+
     #final_score.show()
 
     #with open('comma_pump.midi','wb') as fp:
     final_score.write('midi','comma_pump.midi')
+    final_score.write('musicxml','comma_pump_min.xml')
     #m21.midi.realtime.StreamPlayer(final_score)
