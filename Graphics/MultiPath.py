@@ -1,6 +1,6 @@
 import numpy as np
 import numpy.ma as ma
-import copy as copy
+import copy
 from Graphics.Paths import SplinePath
 from Graphics.utils import  check_listlike, rot_points2d,make_list
 
@@ -9,7 +9,7 @@ class MultiPath(object):
     '''
     An object that stores the concatenation of multiple paths.
     '''
-    def __init__(self,path_list,t_ints=None, center = None, tot_len = None):
+    def __init__(self,path_list,t_ints=None, center = None, tot_len = None,loop=False):
         '''
 
         :param path_list: length of number of paths used.
@@ -35,6 +35,7 @@ class MultiPath(object):
         self.center = np.array(center) if center is not None else np.zeros(ndims)
         self.tot_len = tot_len if tot_len is not None else  sum((path.tot_len for path in path_list))
         self.ndims = ndims #number of dimensions of the path.
+        self.loop = loop
 
     def __add__(self,other):
         if issubclass(type(other),MultiPath):
@@ -183,6 +184,10 @@ class MultiPath(object):
 
         return (path_list,t_ints,center),ndims
 
+    @property
+    def n_paths(self) -> int:
+        return self.t_ints.shape[0]
+
     @staticmethod
     def get_dim_path_list(path_list):
         dims_paths = np.array([path.ndims for path in path_list])
@@ -264,7 +269,7 @@ class MultiPath(object):
 
         return res
 
-    def flattened(self,out=None):
+    def flattened(self,inplace=False):
         '''
         returns a 'flattened' version of the multipath.
         That is, one in which none of the paths within are multipath objects.
@@ -275,11 +280,11 @@ class MultiPath(object):
         t_ints = []
         path_list = []
 
-        res =out if out is not None else copy.deepcopy(self)
+        res =self if inplace is not None else copy.deepcopy(self)
 
         for ind,path in enumerate(self.path_list):
             if issubclass(type(path),MultiPath):
-                mp = path.flattened(out=path)
+                mp = path.flattened(inplace=True)
                 path_list.extend(mp.path_list)
                 min_t,max_t = self.t_ints[ind]
                 t_ints.append(mp.t_ints*(max_t-min_t) + min_t)
@@ -294,6 +299,107 @@ class MultiPath(object):
         res.sort_paths()
         return res
 
+    def to_single_path(self, inplace=False,eps=1e-10,raise_error_unconnected=True):
+        def get_field_path(path,field):
+            ret_val = getattr(path,field)
+            if path.loop:
+                ret_val = np.append(ret_val,ret_val[None,0],axis=0)
+                if field=='t':
+                    ret_val[-1] = 1
+            return ret_val
+
+        res = self if inplace is True else copy.deepcopy(self)
+        res.flattened(inplace=True)
+        if res.check_overlapping_intervals():
+            raise NotImplementedError('overlapping paths are not supported at this time.')
+        if not res.check_connected_ts():
+            warn_str ='Path is not fully connected. Undefined behavior between endpoints.'
+            Warning(warn_str)
+            if raise_error_unconnected:
+                raise NotImplementedError(warn_str)
+
+        coords_list =[np.atleast_2d(get_field_path(path,'coords')) for path in res.path_list]
+        #coords_list.append(np.atleast_2d(res.path_list[-1].coords[-1]))
+
+
+        t_list = [(get_field_path(path,'t')*(t_int[1]-t_int[0]) + t_int[0])
+                           for (path,t_int) in zip(res.path_list,res.t_ints)]
+        #t_list.append(np.atleast_1d(res.t_ints[-1,1]))
+        for i in range(1,res.n_paths):
+            if res.t_ints[i,0] == res.t_ints[i-1,1]:
+                t_list[i][0] +=eps
+                coords_list[i][0] +=eps
+
+
+        t = np.concatenate(t_list)
+        coords = np.concatenate(coords_list)
+
+        k_interp = max(path.k_interp for path in res.path_list)
+        if k_interp>1:
+            Warning('Undefined behavior for nonlinear interpolation.')
+
+        ret_path = SplinePath(coords,t,tot_len=res.tot_len, center=res.center,
+                              loop=self.loop, k_interp=k_interp)
+        return ret_path
+
+
+    def check_overlapping_intervals(self):
+        inds = np.argsort(self.t_ints[:, 0])
+        #n_paths = self.n_paths
+        return any(self.t_ints[inds[1:],0]<self.t_ints[inds[:-1],1])
+
+    def check_connected_ts(self):
+        '''
+        Checks that the union of t ints is a single connected set.
+        :return:
+        '''
+        def interval_intersects_right(curr_int,check_int):
+            return check_int[0] <= curr_int[1] and check_int[1] > curr_int[1]
+        def connected_interval_exists_right():
+            for j in range(i + 1, n_paths):
+                check_int = self.t_ints[inds[j]]
+                if check_int[0] > curr_int[1]:
+                    break
+                if interval_intersects_right(curr_int,check_int):
+                    return True
+
+            for j in range(i - 1, -1, -1):
+                check_int = self.t_ints[inds[j]]
+                if interval_intersects_right(curr_int,check_int):
+                    return True
+
+            return False
+
+        def interval_intersects_left(curr_int,check_int):
+            return check_int[0] < curr_int[0] and check_int[1] >= curr_int[0]
+        def connected_interval_exists_left():
+            for j in range(i - 1, -1, -1):
+                check_int = self.t_ints[inds[j]]
+                if interval_intersects_left(curr_int, check_int):
+                    return True
+            for j in range(i + 1, n_paths):
+                check_int = self.t_ints[inds[j]]
+                if check_int[0] > curr_int[0]:
+                    break
+                if interval_intersects_left(curr_int, check_int):
+                    return True
+            return False
+
+        inds = np.argsort(self.t_ints[:,0])
+        n_paths = self.n_paths
+        full_min_t = np.min(self.t_ints)
+        full_max_t = np.max(self.t_ints)
+        for i in range(n_paths):
+            min_t,max_t = curr_int = self.t_ints[inds[i]]
+
+            if max_t < full_max_t:
+                if not connected_interval_exists_right():
+                    return False
+
+            if min_t > full_min_t:
+                if not connected_interval_exists_left():
+                    return False
+        return True
 
 
     def eval_coords(self,des_t,ret_assigned_vals=False,tol=1e-10):

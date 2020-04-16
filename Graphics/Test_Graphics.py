@@ -12,6 +12,13 @@ from Graphics.fractals import make_sierpinski_triangle_multipath
 from Graphics.Draw import render_path_once, interp_paths, \
     poly_H, path_H, poly_E, path_E
 
+from itertools import chain, combinations
+
+def powerset(iterable):
+    "powerset([1,2,3]) --> () (1,) (2,) (3,) (1,2) (1,3) (2,3) (1,2,3)"
+    s = list(iterable)
+    return chain.from_iterable(combinations(s, r) for r in range(len(s)+1))
+
 class TestPolygon(unittest.TestCase):
     coords_int_path = np.array([[0, 0], [0, 1], [4, 4], [4, 0], [0, 0]])
     coords_square = np.array([[0,0],[0,1],[1,1],[1,0]])
@@ -259,8 +266,49 @@ class TestMultiPath(unittest.TestCase):
 
         y = MultiPath([x,x-1,self.path_square],[[0,.5],[0.5,1],[0.5,1]])
 
-        y.flattened(out=y)
+        y.flattened(inplace=True)
         np_tests.assert_allclose(y.t_ints,[[0,.1],[.4,.5],[.5,.6],[.5,1],[.9,1]])
+
+    def test_overlapping_t_ints(self):
+        def make_multi_path(t_ints):
+            return MultiPath([self.path_square] * t_ints.shape[0], t_ints)
+        total_t_ints= np.array([[0,.4]
+                     , [.1, .5]
+                     , [.4,.9]
+                     , [.5,.9]])
+
+        overlapping_ints= [{0,1}, {1,2},{2,3}]
+
+        for ind,subset in enumerate(powerset(range(4))):
+            if subset:
+                mult_path= make_multi_path(total_t_ints[subset,:])
+                expected = any(overlapping_int.issubset(set(subset)) for overlapping_int in overlapping_ints)
+                actual = mult_path.check_overlapping_intervals()
+                self.assertTrue(expected==actual)
+
+
+    def test_connected_t_ints(self):
+        def make_multi_path(t_ints):
+            return MultiPath([self.path_square] * t_ints.shape[0], t_ints)
+        total_t_ints= np.array([[0,.4]
+                     , [.1, .5]
+                     , [.4,.9]
+                     , [.5,1.]
+                     , [.5,.9]])
+
+        unconnected_subsets = [{0,3},{0,4},{0,3,4}]
+
+        #expected_vec = [None, True, True, True, True, True, True, True, True, False,True, True, True, True, True, True]
+                      # 0000, 1000, 0100, 0011, 0100, 0101, 0110, 0111, 1000, 1001, 1010, 1011, 1100, 1101, 1110, 1111
+        for ind,subset in enumerate(powerset(range(4))):
+            if subset:
+                mult_path= make_multi_path(total_t_ints[subset,:])
+                expected = not (set(subset) in unconnected_subsets)
+                actual =mult_path.check_connected_ts()
+                self.assertTrue(expected==actual)
+
+
+
 
 
 class TestDraw(unittest.TestCase):

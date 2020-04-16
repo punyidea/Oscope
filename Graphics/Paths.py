@@ -192,7 +192,7 @@ class SplinePath(Path):
         :return:
         '''
         t = np.append(t,1)
-        coords = coords[np.arange(len(coords) + 1) % len(coords)]
+        coords = np.append(coords,coords[None,0],axis=0)
         return coords,t
 
 

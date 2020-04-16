@@ -33,7 +33,7 @@ def make_sierpinski_triangle(n_iters, radius, center=None, ang=0):
                 path*.5 + coords_shifts[i]
                 for i in range(3)]
 
-        return MultiPath(new_pathlist,new_t_ints)
+        return MultiPath(new_pathlist,new_t_ints).flattened(inplace=True)
     center = center if center is not None else np.zeros(2)
     start_triangle = RegPolygon(3,radius)
     sier_triangle = MultiPath([start_triangle],[[0,1]])
@@ -72,11 +72,11 @@ def make_sierpinski_triangle_multipath(n_layers,radius,center=None,ang = 0):
     assert (center.shape==(2,))
 
     start_triangle = RegPolygon(3,radius)
-    sier_triangle = MultiPath([start_triangle],[[0,1]])
+    sier_triangle = MultiPath([start_triangle],[[0,1]],loop=True)
     for i in range(n_layers):
-        sier_triangle = sierpinski_subdivide_path(sier_triangle,radius,i+1)
+        sier_triangle = sierpinski_subdivide_path(sier_triangle,radius)
 
-    return (sier_triangle.flattened() + center).rot2d_inplace(ang)
+    return (sier_triangle.to_single_path(inplace=True) + center).rot2d_inplace(ang)
 
 def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
     '''
@@ -103,7 +103,8 @@ def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
                     ]
 
         t_ints = np.stack((np.arange(0,4),np.arange(1,5)),axis=-1)/4
-        return MultiPath(pathlist,t_ints,center= van_koch_line.center)
+        snowflake_path = MultiPath(pathlist,t_ints,center= van_koch_line.center)
+        return snowflake_path.to_single_path(inplace=True)
 
     def make_van_koch_segment(n_iters):
         #make van koch segment of length 1.
@@ -116,15 +117,17 @@ def make_van_koch_snowflake(n_iters,radius,center=None,ang=0):
     radius = np.array(radius)
     center = center if center is not None else np.zeros(2)
     v_k_seg = make_van_koch_segment(n_iters)
-    if n_iters >0:
-        v_k_seg.flattened(out=v_k_seg)
+    # if n_iters >0:
+    #     v_k_seg.flattened(inplace=True)
 
     snowflake_offs_angs = (np.arange(6) + 3/2) * 2*np.pi/6
     seg_offs = np.stack([np.cos(snowflake_offs_angs),np.sin(snowflake_offs_angs)],axis=-1)*np.sqrt(3)/2
     path_list =[(v_k_seg + seg_offs[ind]).rot2d_inplace(ind*60) for ind in range(6)]
     t_ints = np.stack((np.arange(0, 6), np.arange(1, 7)), axis=-1) / 6
-    v_k_snowflake = MultiPath(path_list,t_ints)
+    v_k_snowflake = MultiPath(path_list,t_ints,loop=True).flattened(inplace=True)
 
-    return (v_k_snowflake.flattened()*radius + center).rot2d_inplace(ang)
+
+    snowflake_multipath = (v_k_snowflake*radius + center).rot2d_inplace(ang)
+    return snowflake_multipath.to_single_path(inplace=True)
 
 
