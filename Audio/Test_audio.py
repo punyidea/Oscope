@@ -22,9 +22,9 @@ from Graphics.fractals import make_sierpinski_triangle_multipath,\
     make_van_koch_snowflake
 
 
+testdir = 'TestFiles'
+test_source = '/Users/vsp/Music/iTunes/iTunes Media/Music/Kimya Dawson/Remember That I Love You/07 I Like Giants.m4a'
 
-test_file = '/Users/vsp/Music/iTunes/iTunes Media/Music/Kimya Dawson/Remember That I Love You/07 I Like Giants.m4a'
-test_out = 'animated_hell_path.mp4'
 
 
 
@@ -35,7 +35,7 @@ class TestRead(unittest.TestCase):
     aud_seg = AudioSegment(data=[],frame_rate=fs,channels=2,sample_width=4)
 
     def test_fileio(self):
-        aud_seg = AudioSegment.from_file(test_file)
+        aud_seg = AudioSegment.from_file(test_source)
 
         first_5_seconds = aud_seg[:50000]
         fs = aud_seg.frame_rate
@@ -50,7 +50,8 @@ class TestRead(unittest.TestCase):
 
 
     def test_setting_hello_world(self):
-        aud_seg = AudioSegment.from_file(test_file)
+        test_out = os.path.join(testdir,'animated_hell_path.mp4')
+        aud_seg = AudioSegment.from_file(test_source)
 
         first_5_seconds = aud_seg[:50000]
         fs = aud_seg.frame_rate
@@ -86,7 +87,7 @@ class TestRead(unittest.TestCase):
         self.assertTrue(True)
 
     def test_mult_triangle(self):
-        test_out = 'triangle_anim.wav'
+        test_out = os.path.join(testdir,'triangle_anim.wav')
         f_triangle = 150 #100 Hz
         t_per_draw = 1/f_triangle
         t_per_letter = 5 #5 s per triangle
@@ -127,7 +128,7 @@ class TestRead(unittest.TestCase):
         self.assertTrue(True)
 
     def test_sierpinski(self):
-        test_out = 'sierpinski_triangle_path.flac'
+        test_out = os.path.join(testdir,'sierpinski_triangle_path.flac')
         f_triangle = 440  # 100 Hz
         t_per_draw = 1 / f_triangle
         t_per_iter = 3  # 5 s per triangle
@@ -151,7 +152,7 @@ class TestRead(unittest.TestCase):
         self.assertTrue(True)
 
     def test_von_koch(self):
-        test_out = 'von_koch.flac'
+        test_out = os.path.join(testdir,'von_koch.flac')
         f_path=440
         t_per_draw = 1/ f_path
         t_per_iter=3
@@ -181,7 +182,7 @@ class TestRead(unittest.TestCase):
 
 
     def test_von_koch_song(self):
-        test_out = 'von_koch.flac'
+        test_out = os.path.join(testdir,'von_koch.flac')
         f_path=440
         t_per_draw = 1/ f_path
         t_per_iter=3
@@ -212,7 +213,7 @@ class TestRead(unittest.TestCase):
 
     def test_circle_van_koch(self):
         test_out='van_koch_giants.flac'
-        aud_seg = AudioSegment.from_file(test_file)
+        aud_seg = AudioSegment.from_file(test_source)
 
         first_50_seconds = aud_seg[:50000]
         fs = aud_seg.frame_rate
